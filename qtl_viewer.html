@@ -1,0 +1,226 @@
+<!doctype html>
+<html ng-app="qtl-viewer" lang="en">
+  <head>
+  	<meta charset="utf-8"/>
+    <meta http-equiv="Content-Language" content="en"/>
+    <meta name="google" content="notranslate">
+    <!-- scripts -->
+    <script src="support/js/external/jquery.min.js"></script>
+    <script src="support/js/external/angular.min.js"></script>
+    <script src="support/js/external/angular-animate.min.js"></script>
+    <script src="support/js/external/angular-sanitize.min.js"></script>
+    <script src="support/js/external/ui-bootstrap-tpls-2.5.0.min.js"></script>
+    <script src="support/js/external/select.min.js"></script>
+    <script src="support/js/external/ngStorage.js"></script>
+    <script src="support/js/internal/qtlViewer.js"></script>
+    <script src="support/js/internal/qtlGroup.js"></script>
+    <script src="support/js/external/d3.v3.min.js" charset="utf-8"></script>
+    <script src="support/js/external/d3-ease.v1.min.js"></script>
+    <script src="support/js/external/d3-tip.js"></script>
+    <script src="support/js/external/jquery.minicolors.min.js"></script>
+    <script src="support/js/external/angular-minicolors.min.js"></script>
+    <script src="support/js/external/angular-downloadsvg-directive.js"></script>
+
+    <!-- stylesheets -->
+    <link href="support/css/external/bootstrap.min.css" rel="stylesheet">
+    <link href="support/css/external/navbar-fixed-side.css" rel="stylesheet">
+    <link href="support/css/external/select.min.css" rel="stylesheet">
+    <link href="support/css/external/handsontable.full.min.css" rel="stylesheet">
+    <link href="support/css/internal/viewer_styling.css" rel="stylesheet">
+    <link href="support/css/external/Montserrat.css" rel="stylesheet">
+    <link href="support/css/external/Open+Sans.css" rel="stylesheet">
+    <link href="support/css/external/Inconsolata.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.css" rel="stylesheet">
+  </head>
+  <nav class="navbar navbar-gradient navbar-expand navbar-static-top" role="navigation">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle" ng-click="isNavCollapsed = !isNavCollapsed">
+        <span class="sr-only">Toggle navigation</span>
+      </button>
+      <div class="navbar-left">
+        <img class="img-responsive" src="support/images/qtl_logo_white.png" alt="Diversity outbred mouse lipid qtl portal">
+      </div>
+    </div>
+    <div class="collapse navbar-collapse" uib-collapse="isNavCollapsed">
+      <!--
+      DELETE THIS IF YOU DON"T NEED ADDITIONAL LINKS ON THE NAVBAR
+      <ul class="nav navbar-nav">
+        <li><a href="#">Link 1</a></li>
+        <li><a href="#">Link 2</a></li>
+        <li uib-dropdown on-toggle="toggled(open)">
+          <a href id="simple-dropdown" uib-dropdown-toggle>Link 3 <span class="caret"></span></a>
+          <ul class="dropdown-menu" uib-dropdown-menu aria-labelledby="simple-dropdown">
+            <li><a href="#">SubItem 1</a></li>
+            <li><a href="#">SubItem 2</a></li>
+            <li><a href="#">SubItem 3</a></li>
+            <li role="separator" class="divider"></li>
+            <li><a href="#">SubItem 4</a></li>
+          </ul>
+        </li>
+      </ul>
+      -->
+      <ul class="nav navbar-nav navbar-right">
+        <a href="http://coonlabs.com/">
+          <img class="img-responsive" src="support/images/coon_logo.png" alt="Coon laboratories logo">
+        </a>
+        <!--
+        DELETE THIS IF YOU DON"T NEED ADDITIONAL LINKS ON THE NAVBAR
+        <li uib-dropdown on-toggle="toggled(open)">
+          <a href id="simple-dropdown" class="nav-text" uib-dropdown-toggle>Signed in as John Doe <span class="caret"></span></a>
+          <ul class="dropdown-menu" uib-dropdown-menu aria-labelledby="simple-dropdown">
+            <li><a href="#">Profile</a></li>
+            <li role="separator" class="divider"></li>
+            <li><a href="#">Sign Out</a></li>
+          </ul>
+        </li>
+        -->
+      </ul>
+    </div>
+  </nav>
+  <div class="container-fluid">
+    <body>
+      <div ng-controller="GroupCtrl">
+        <div class="row">
+          <div ng-controller="queryCtrl">
+            <div class="col-md-3">
+              <div class="panel panel-default">
+                <div class="panel-heading">
+                  <h2 class="panel-title">Control Panel</h2>
+                </div>
+                <div class="panel-body">
+                  <label class="section-header" title="Use the below options to filter identified lipid features by lipid class, tissue, or precursor mass-to-charge">Filter Lipid QTLs</label>
+                  <div class="row">
+                    <div class="col-md-6">
+                      <label class="input-label" title="Select a lipid class from the dropdown!">
+                        Lipid Class
+                      </label> 
+                      <i class="fa fa-question-circle" aria-hidden="true" title="Select a lipid class from the dropdown!"></i>
+                      <div class="form-group">
+                        <ui-select ng-model="lipids.filter.class" search-enabled="true">
+                          <ui-select-match>
+                            <span ng-bind="lipids.filter.class.className"></span>
+                          </ui-select-match>
+                          <ui-select-choices repeat="class in lipids.options.classes | filter: $select.search | orderBy: class.className">
+                            <span ng-bind="class.className"></span>
+                          </ui-select-choices>
+                        </ui-select>
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <label class="input-label" title="Select a tissue to filter lipid features!">
+                        Tissue
+                      </label> 
+                      <i class="fa fa-question-circle" aria-hidden="true" title="Select a tissue to filter lipid features!"></i>
+                      <div class="form-group">
+                        <ui-select ng-model="lipids.filter.tissue" search-enabled="true">
+                          <ui-select-match>
+                            <span ng-bind="lipids.filter.tissue.name"></span>
+                          </ui-select-match>
+                          <ui-select-choices repeat="tissue in lipids.options.tissues | filter: $select.search">
+                            <span ng-bind="tissue.name"></span>
+                          </ui-select-choices>
+                        </ui-select>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="row">
+                    <div class="col-md-6">
+                      <label class="input-label" title="Enter your lipid precursor m/z below!">
+                        Lipid Precursor <i>m</i>/<i>z</i>
+                      </label>
+                      <i class="fa fa-question-circle" aria-hidden="true" title="Enter your lipid precursor m/z below!"></i>
+                      <div class="input-group">
+                        <input type="number" title="Enter your lipid precursor m/z here!" class="form-control" ng-model="lipids.filter.precursorMz" min="0" max="2000"/>
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <label class="input-label" title="Enter your mass tolerance below! Click the button to switch between ppm and Daltons.">
+                        Mass tolerance
+                      </label>
+                      <i class="fa fa-question-circle" aria-hidden="true" title="Enter your mass tolerance below! Click the button to switch between ppm and Daltons."></i>
+                      <div class="input-group">
+                        <input type="number" title="Enter your mass tolerance below! Click the button to switch between ppm and Daltons." class="form-control" ng-model="lipids.filter.mzTolerance" min="0" max="2000" />
+                        <span class="input-group-btn"> 
+                          <button class="btn btn-primary" title="Click me to switch between ppm and Daltons." type="button" ng-click="swapMatchingType()">
+                            {{lipids.filter.mzToleranceType}}
+                          </button>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <hr/>
+                  <div ng-hide="lipids.options.filteredIds.length === 0">
+                    <label class="section-header" title="Select a lipid from the available lipid species filtered from above!">Select A Lipid: </label>
+                    <div class="row">
+                      <div class=col-md-12>
+                        <label class="input-label" title="Please select a lipid">Select A Lipid Feature:</label>
+                        <span title="Please select a lipid">{{lipids.options.filteredIds.length}} Option(s)</span> 
+                        <i class="fa fa-question-circle" title="Select a lipid from the available lipid species filtered from above!" aria-hidden="true"></i>
+                        <div class="form-group">
+                          <ui-select ng-model="lipids.selectedQtl.lipid" search-enabled="false">
+                            <ui-select-match placeholder="Click to browse available lipids!">
+                              <span ng-bind-html="formatSelectedLipid()"></span>
+                            </ui-select-match>
+                            <ui-select-choices repeat="id in lipids.options.filteredIds  | orderBy:'data_name' | limitTo: 250">
+                              <span ng-bind-html="formatLipidOption(id)"></span><hr class="no-padding"/>
+                            </ui-select-choices>
+                          </ui-select>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div ng-show="lipids.options.filteredIds.length === 0">
+                    <label class="section-header" style="color:red">
+                      No valid lipid ID's found using this filter
+                    </label>
+                  </div>
+                  <div ng-hide="lipids.options.qtls.length === 0">
+                    <hr/>
+                    <label class="section-header" title="Select a qtl from the dropdown below to view a QTL">Select A QTL to View</label>
+                    <div class="row">
+                      <div class=col-md-12>
+                        <label class="input-label" title="Select a qtl from the dropdown below to view a QTL">Select A QTL: </label>
+                        <span title="Select a qtl from the dropdown below to view a QTL">{{lipids.options.qtls.length}} Option(s)</span> 
+                        <i class="fa fa-question-circle" aria-hidden="true" title="Select a qtl from the dropdown below to view a QTL"></i>
+                        <div class="form-group">
+                          <ui-select ng-disabled="lipids.options.qtls.length == 0" ng-model="lipids.selectedQtl.qtl" search-enabled="false">
+                            <ui-select-match placeholder="Click to browse available qtls">
+                              <span ng-bind-html="formatSelectedQtl()"></span>
+                            </ui-select-match>
+                            <!-- crazy & ugly filtering logic -->
+                            <ui-select-choices repeat="qtl in lipids.options.qtls | filter: $select.search">
+                              <span ng-bind-html="formatQtlOption(qtl)"></span><hr class="no-padding"/>
+                            </ui-select-choices>
+                          </ui-select>
+                        </div>
+                      </div>
+                    </div>
+                    <!--<button class="btn btn-default" ng-click="logScope()">Log Scope</button>-->
+                  </div>
+                  <div ng-show="lipids.selectedQtl.lipid !== null && lipids.options.qtls.length === 0">
+                    <label class="section-header" style="color:red">
+                      No QTLs found for this lipid feature. Please select another one.
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-9">
+            <div class="panel panel-default">
+              <div class="panel-heading">
+                <h2 class="panel-title">{{chromosomeNumber}}</h2>
+              </div>
+              <div class="panel-body">
+                <!--<div qtl-groups plotdata="set.groupData" svgsize="set.svgSize.groupSVG" class="content"></div>-->
+                <div lod-line-chart plotdata="set.consensusData" svgsize="set.svgSize.lodSVG" class="content"></div>
+                <hr/>
+                <div consensus-regressions plotdata="set.consensusData" svgsize="set.svgSize.lodSVG" class="content"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </body>
+  </div>
+</html>
