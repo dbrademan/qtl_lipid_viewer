@@ -24,93 +24,57 @@ myApp.controller('GroupCtrl', function($scope, $uibModal, $log, $localStorage, $
       y: Array.from({length: 39}, () => Math.floor(Math.random() * 119) + 1)
     },
     consensusData: {
-      alleleAffectPlots: {
-        x: Array.from({length: 100}, () => Math.floor(Math.random() * 3000000) + 138500000).sort(function(a, b){return a-b}),
-        y: [
-          Array.from({length: 100}, () => Math.random() * 2 - 1),
-          Array.from({length: 100}, () => Math.random() * 2 - 1),
-          Array.from({length: 100}, () => Math.random() * 2 - 1),
-          Array.from({length: 100}, () => Math.random() * 2 - 1),
-          Array.from({length: 100}, () => Math.random() * 2 - 1),
-          Array.from({length: 100}, () => Math.random() * 2 - 1),
-          Array.from({length: 100}, () => Math.random() * 2 - 1),
-          Array.from({length: 100}, () => Math.random() * 2 - 1)
-        ],
+      alleleEffectPlots: {
+        x: [],
+        y: [],
         names: ["AJ", "B6", "129", "NOD", "NZO", "CAST", "PWK", "WSB"],
         colors: ["#FFDC00", "#888888", "#F08080", "#0064C9", "#7FDBFF", "#2ECC40", "#FF4136", "#B10DC9"]
       },
       lodPlot: {
-        y: Array.from({length: 100}, () => Math.floor(Math.random() * 119) + 1)
-      },
-      realLodPlot: {
-        /*
-        x: Array.from({length: 100}, () => Math.floor(Math.random() * 3000000) + 138500000).sort(function(a, b){return a-b}),
-        y: Array.from({length: 100}, () => Math.random() * 2 - 1)
-        */
         x: [],
         y: []
-      }, 
-      realAlleleEffectPlots: {
+      },
+      realLodPlot: {
         x: [],
-        //y: [[],[],[],[],[],[],[],[]],
-        y: [],
-        names: ["AJ", "B6", "129", "NOD", "NZO", "CAST", "PWK", "WSB"],
-        colors: ["#FFDC00", "#888888", "#F08080", "#0064C9", "#7FDBFF", "#2ECC40", "#FF4136", "#B10DC9"]
-      }
+        y: []
+      },
+      qtl: {},
+      genes: []
     },
-    /*
-    svgSize: {
-      groupSVG: {
-        height: 300,
-        width: 1400,
-        margin: {
-          top: 15,
-          right: 15,
-          bottom: 45,
-          left: 55
-        },
-        padding: .05,
-      },
-      qtlSVG: {
-        height: 300,
-        width: 1100,
-        margin: {
-          top: 15,
-          right: 15,
-          bottom: 45,
-          left: 55
-        },
-        padding: .05
-      },
+    svgSizes: {
       lodSVG: {
-        height: 300,
-        width: 485,
-        margin: {
-          top: 15,
-          right: 15,
-          bottom: 45,
-          left: 55
-        },
-        padding: .05
-      },
-      selectedGroup: -1,
-      selectedQTLs: []
-    },
-    */
-    svgSize: {
-      lodSVG: {
-        height: 240,
+        height: 120,
         width: 1120,
         margin: {
-          top: 15,
+          top: 5,
           right: 15,
           bottom: 45,
           left: 55
         },
         padding: .02,
       },
-      selectedGroup: -1,
-      selectedQTLs: []
+      alleleEffectSVG: {
+        height: 120,
+        width: 1120,
+        margin: {
+          top: 5,
+          right: 15,
+          bottom: 45,
+          left: 55
+        },
+        padding: .02,
+      },
+      geneSVG: {
+        height: 180,
+        width: 1120,
+        margin: {
+          top: 10,
+          right: 15,
+          bottom: 45,
+          left: 55
+        },
+        padding: .02,
+      }
     },
     colors: [
       {measurement: "Microbial", color: "#231F20"},
@@ -125,14 +89,17 @@ myApp.controller('GroupCtrl', function($scope, $uibModal, $log, $localStorage, $
 
   $scope.updateLodPlot = function(plottableObject) {
     $scope.chromosomeNumber = "Chromosome " + plottableObject.chromosome;
-
-    $scope.set.consensusData.realLodPlot.x = plottableObject.positions;
-    $scope.set.consensusData.realLodPlot.y = plottableObject.lods;
+    $scope.set.consensusData.lodPlot.x = plottableObject.positions;
+    $scope.set.consensusData.lodPlot.y = plottableObject.lods;
   };
 
   $scope.updateAlleleEffectPlot = function(plottableObjects) {
-    $scope.set.consensusData.realAlleleEffectPlots.x = plottableObjects[0].positions;
-    $scope.set.consensusData.realAlleleEffectPlots.y = plottableObjects
+    $scope.set.consensusData.alleleEffectPlots.x = plottableObjects[0].positions;
+    $scope.set.consensusData.alleleEffectPlots.y = plottableObjects;
+  };
+
+  $scope.updateGenePlot = function(plottableObjects) {
+    $scope.set.consensusData.genes = plottableObjects;
   };
 });
 
@@ -367,6 +334,7 @@ myApp.controller('queryCtrl', function($scope, $uibModal, $log, $localStorage, $
             alert(response.data.error);
           } else {
             $scope.updateLodPlot(response.data);
+            $scope.set.consensusData.qtl = $scope.lipids.selectedQtl.qtl;
           }
         });
 
@@ -379,6 +347,18 @@ myApp.controller('queryCtrl', function($scope, $uibModal, $log, $localStorage, $
             alert(response.data.error);
           } else {
             $scope.updateAlleleEffectPlot(response.data);
+          }
+        });
+
+      var url = "support/php/queryGenes.php";
+      var data = $scope.lipids.selectedQtl.qtl;
+      $http.post(url, data)
+        .then( function(response) {
+          // if errors exist, alert user
+          if (response.data.hasOwnProperty("error")) {
+            alert(response.data.error);
+          } else {
+            $scope.updateGenePlot(response.data);
           }
         });  
     }

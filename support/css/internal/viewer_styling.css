@@ -8,7 +8,11 @@ img {
 }
 
 hr {
-  border-top: 1px solid #b7b7b7;
+  border-top: 1px solid #000000;
+}
+
+.dashed {
+  border-style: dashed;
 }
 
 hr.no-padding {
@@ -159,30 +163,6 @@ body {
    font-size: 16px;
 }
 
-.aminoacid {
-  font-family: 'Inconsolata', monospace;
-  text-anchor: middle;
-  alignment-baseline: central;
-}
-
-.precursorstatscategory {
-  font-family: Montserrat, sans-serif;
-  font-weight: 500;
-  font-size: 18px;
-}
-
-.precursorstatsdata {
-  font-family: Montserrat, sans-serif;
-  font-weight: 400;
-  font-size: 17px;
-}
-
-.zeroline {
-  stroke-dasharray: 10, 5;
-  stroke: #A6A6A6;
-  fill: #A9A9A9;
-}
-
 /* D3 CSS */
 .chart .domain {
   fill: none;
@@ -193,6 +173,7 @@ body {
 .xAnnotationLabel, 
 .yAnnotationLabel,
 .yQTLLabel,
+.xGeneLabel,
 .yGeneLabel,
 .xLodLabel,
 .yLodLabel,
@@ -217,6 +198,15 @@ body {
 .line {
   fill: none;
   stroke-width: 2;
+}
+
+.zeroline {
+  stroke-width: 1;
+  stroke-dasharray: 5;
+}
+
+.qtlIndicator {
+  stroke-width: 0;
 }
 
 /* probably won't work tooltip */

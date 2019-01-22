@@ -5,418 +5,6 @@
    */
 var chartModule = angular.module("qtl.groups", []);
 
-
-// QTL groups
-chartModule.directive("qtlGroups", function($log) {
-    
-    /**
-    * @description The directive variable used to the initiate the 2-way binding between this template and the controller
-    * @property {string} directive.restrict - Restricts the directive to attribute and elements only
-    * @property {object} directive.scope - Holds objects containing spectral data, peptide data, and visualization settings
-    * @property {object} directive.scope.plotdata - Contains the numerical, ordinal, and categorical data required to generate the visualization
-    * @property {object} directive.scope.peptide - Contains ms2 scan number, peptide sequence, precursor mz, charge, and modifications
-    * @property {object} directive.scope.settings - Contains tolerance type (ppm/Da), tolerance threshold, and ionization mode
-    */
-    let directive = {
-      restrict: 'AE',
-      scope: {
-        plotdata: '=?',
-        svgsize: '=?',
-        colors: '=?'
-      }
-    };
-
-    /**
-    * @description Links the IPSA directive to the annotatedSpectrum HTML tag and retrieves the tag attributes.
-    */
-    directive.link = function(scope, elements, attr) {
-
-      var tip = d3.tip()
-        .attr('class', 'd3-tip')
-        .offset([-10, 0]);
-
-      scope.getSvgSize = function () {
-        return scope.svgsize;
-      }
-
-      scope.initialize = function() {
-        var svgSize = scope.getSvgSize();
-
-        // create svg element to hold charts
-        scope.svg = d3.select(elements[0]).append("svg").attr("class", "chart");
-
-        // main svg container to hold spectrum annotations
-        scope.container = scope.svg.append("g");
-
-        scope.plotContainer = scope.container.append("g").attr("id", "groupContainer");
-
-        scope.container.append("g")
-          .attr("class", "xAnnotation")
-          .append("text")
-          .attr("class", "xAnnotationLabel")
-          .attr("transform","translate(" + (svgSize.width/2) + " ," + (svgSize.margin.bottom - 5) + ")")
-          .text("Position");
-
-        scope.container.append("g")
-          .attr("class", "yAnnotation")
-          .append("text")
-          .attr("class", "yAnnotationLabel")
-          .attr("transform", "rotate(-90)")
-          .attr("y", 0 - svgSize.margin.left)
-          .attr("x", 0 - (svgSize.height / 2))
-          .attr("dy", "1em")
-          .text("QTLs in Group");
-
-        /*
-        scope.container.append("text")
-          .attr("x", (svgSize.width / 2))             
-          .attr("y", 0 - (svgSize.margin.top / 2))
-          .attr("text-anchor", "middle")  
-          .style("font-size", "16px")  
-          .text("QTL Groups");
-        */
-
-        scope.container.attr("transform", "translate(" + svgSize.margin.left + ", " + (svgSize.margin.top) +  ")")
-
-        scope.setSvgSize();
-      };
-       
-      scope.setSvgSize = function() {
-        var svgSize = scope.getSvgSize();
-
-        scope.svg.attr('viewBox','0 0 '+ (svgSize.width + svgSize.margin.left + svgSize.margin.right) + ' ' +
-            (svgSize.height + svgSize.margin.top + svgSize.margin.bottom))
-          .attr('preserveAspectRatio','xMinYMin');
-        scope.redraw();
-      };
-
-      scope.redraw = function() {
-        scope.drawGroups();
-      };
-
-      scope.getX = function () {
-        return scope.plotdata.x;
-      };
-
-      scope.getY = function() {
-        return scope.plotdata.y;
-      };
-
-      scope.getColors = function() {
-        return "#F05232";
-      }
-
-      scope.drawGroups = function() {
-        var x, y, xAxis, yAxis, circleDataset, xValues = scope.getX(), yValues = scope.getY(), colors = scope.getColors(), svgSize = scope.getSvgSize();
-
-        if (isNaN(d3.max(xValues))) {
-          xValues = [0];
-        }
-        if (isNaN(d3.max(yValues))) {
-          yValues = [0];
-        }
-
-        if (xValues && yValues) {
-          shiftFactor = 1;
-
-          var xScaleFudgeFactor = (d3.max(xValues) - d3.min(xValues)) * .025;
-          var yScaleFudgeFactor = d3.max(yValues) * .1;
-
-          x = d3.scale.linear().domain([d3.min(xValues) - xScaleFudgeFactor, d3.max(xValues) + xScaleFudgeFactor]).range([ 0, svgSize.width], 0);
-          y = d3.scale.linear().domain([0 - yScaleFudgeFactor, d3.max(yValues) + yScaleFudgeFactor]).range([ svgSize.height, 0]);
-          xAxis = d3.svg.axis().scale(x).orient("bottom").ticks(10)
-          .tickFormat(function(d) { 
-            return d3.format("s")(d) + "bp";
-          });
-          yAxis = d3.svg.axis().scale(y).orient("left").ticks(5);
-
-          var plotData = [];
-
-          for (var i = 0; i < xValues.length; i++) {          
-            plotData.push({
-              x: xValues[i],
-              y: yValues[i],
-              color: colors,
-            });
-          }
-
-          var delay = 1250/ plotData.length;
-          scope.container.selectAll("g.xAnnotation").attr("transform", "translate(0, " + svgSize.height + ")").call(xAxis);
-          scope.container.selectAll("g.yAnnotation").call(yAxis);
-
-          scope.plotContainer.call(tip);
-
-          circleDataset = scope.plotContainer.selectAll(".masserror").data(plotData);
-          circleDataset.enter().append("circle").attr("class", "masserror");
-
-          circleDataset.attr("cy", function (d) {
-            return y(0);
-          }).style("fill", function(d) {
-            return d.color;
-          }).attr("cx", function (d) {
-            return x(d.x);
-          }).attr("r", function (d) {
-            return 7.5;
-          }).attr("opacity", 0).transition().delay(function(d, i) {
-            return i * delay;
-          }).duration(1250).attr("cy", function (d) {
-            return y(d.y);
-          }).attr("opacity", 1);
-
-          // remove unneeded circles
-          circleDataset.exit().remove();
-
-          circleDataset.on("mouseenter", function(d) {
-            d3.select(this).style("stroke", function (d, i) {
-              return "black";
-            }).attr("r", function () {
-              return 10;
-            });
-
-            tip.html(function () {
-              return "<strong>Group center:</strong> <span style='color:red'>" + d.x + " </span><br><br>"
-                + "<strong>QTLs in Group:</strong> <span style='color:red'>" + d.y + "</span><br><br>"
-                + "<strong>Color (to be filled later):</strong> <span style='color:red'>" + d.color + "</span>";
-            });
-            tip.show();
-          });
-
-          circleDataset.on("mouseleave", function(d) {
-            d3.select(this).style("stroke", "none").attr("r", function(d) {
-              return 7.5;
-            });
-            tip.hide();
-          });
-        }
-      };
-
-      /**
-       * Watch model changes
-       */
-      scope.$watch('plotdata', scope.redraw, true);
-      scope.$watch('options', scope.setSvgSize);
-       
-      scope.initialize();
-    };
-     
-    return directive; 
-});
-
-// Individual QTLs and associated genes
-chartModule.directive("groupInspector", function($log) {
-    
-    /**
-    * @description The directive variable used to the initiate the 2-way binding between this template and the controller
-    * @property {string} directive.restrict - Restricts the directive to attribute and elements only
-    * @property {object} directive.scope - Holds objects containing spectral data, peptide data, and visualization settings
-    * @property {object} directive.scope.plotdata - Contains the numerical, ordinal, and categorical data required to generate the visualization
-    * @property {object} directive.scope.peptide - Contains ms2 scan number, peptide sequence, precursor mz, charge, and modifications
-    * @property {object} directive.scope.settings - Contains tolerance type (ppm/Da), tolerance threshold, and ionization mode
-    */
-    var directive = {
-      restrict: 'AE',
-      scope: {
-        plotdata: '=?',
-        svgsize: '=?',
-        colors: '=?'
-      }
-    };
-
-    /**
-    * @description Links the IPSA directive to the annotatedSpectrum HTML tag and retrieves the tag attributes.
-    */
-    directive.link = function(scope, elements, attr) {
-
-      var tip = d3.tip()
-        .attr('class', 'd3-tip')
-        .offset([-10, 0]);
-
-      scope.getSvgSize = function () {
-        return scope.svgsize;
-      }
-
-      scope.initialize = function() {
-        var svgSize = scope.getSvgSize();
-
-        // create svg element to hold charts
-        scope.svg = d3.select(elements[0]).append("svg").attr("class", "chart");
-
-        // main svg container to hold spectrum annotations
-        scope.container = scope.svg.append("g");
-
-        scope.qtlContainer = scope.container.append("g").attr("id", "qtlContainer");
-        scope.geneContainer = scope.container.append("g").attr("id", "geneContainer");
-
-        scope.container.append("g")
-          .attr("class", "xQTL");
-
-        scope.container.append("g")
-          .attr("class", "yQTL")
-          .append("text")
-          .attr("class", "yQTLLabel")
-          .attr("transform", "rotate(-90)")
-          .attr("y", 0 - svgSize.margin.left)
-          .attr("x", 0 - (svgSize.height * 3 / 8))
-          .attr("dy", "1em")
-          .text("QTL LOD Score");
-
-        scope.container.append("g")
-          .attr("class", "xGene")
-          .append("text")
-          .attr("class", "xAnnotationLabel")
-          .attr("transform","translate(" + (svgSize.width / 2) + " ," + (svgSize.margin.bottom - 5) + ")")
-          .text("Position");
-
-        scope.container.append("g")
-          .attr("class", "yGene")
-          .append("text")
-          .attr("class", "yGeneLabel")
-          .attr("transform", "rotate(-90)")
-          .attr("y", 0 - svgSize.margin.left)
-          .attr("x", 0 - (svgSize.height * 7 / 8))
-          .attr("dy", "1em")
-          .text("Genes");
-
-        /*
-        scope.container.append("text")
-          .attr("x", (svgSize.width / 2))             
-          .attr("y", 0 - (svgSize.margin.top / 2))
-          .attr("text-anchor", "middle")  
-          .style("font-size", "16px") 
-          .text("QTL Inspector");
-        */
-
-        scope.container.attr("transform", "translate(" + svgSize.margin.left + ", " + (svgSize.margin.top) +  ")")
-
-        scope.setSvgSize();
-      };
-       
-      scope.setSvgSize = function() {
-        var svgSize = scope.getSvgSize();
-
-        scope.svg.attr('viewBox','0 0 '+ (svgSize.width + svgSize.margin.left + svgSize.margin.right) + ' ' +
-            (svgSize.height + svgSize.margin.top + svgSize.margin.bottom))
-          //.attr('preserveAspectRatio','xMinYMin');
-        scope.redraw();
-      };
-
-      scope.redraw = function() {
-        scope.drawGroups();
-      };
-
-      scope.getX = function () {
-        return scope.plotdata.x;
-      };
-
-      scope.getY = function() {
-        return scope.plotdata.y;
-      };
-
-      scope.getColors = function() {
-        return scope.colors;
-      }
-
-      scope.drawGroups = function() {
-        var x, y, geneY, qtlXAxis, qtlYAxis, geneXAxis, geneYAxis, circleDataset, xValues = scope.getX(), yValues = scope.getY(), colors = scope.getColors(), svgSize = scope.getSvgSize();
-
-        if (isNaN(d3.max(xValues))) {
-          xValues = [0];
-        }
-        if (isNaN(d3.max(yValues))) {
-          yValues = [0];
-        }
-
-        if (xValues && yValues) {
-          shiftFactor = 1;
-
-          var xScaleFudgeFactor = (d3.max(xValues) - d3.min(xValues)) * .025;
-          var yScaleFudgeFactor = d3.max(yValues) * .1;
-
-          x = d3.scale.linear().domain([d3.min(xValues) - xScaleFudgeFactor, d3.max(xValues) + xScaleFudgeFactor]).range([ 0, svgSize.width], 0);
-          y = d3.scale.linear().domain([0 - yScaleFudgeFactor, d3.max(yValues) + yScaleFudgeFactor]).range([ svgSize.height * 0.75, 0]);
-          geneY = d3.scale.linear().domain([0 - yScaleFudgeFactor, d3.max(yValues) + yScaleFudgeFactor]).range([ svgSize.height, svgSize.height * 0.75]);
-
-          qtlXAxis = d3.svg.axis().scale(x).orient("bottom").tickValues([]).tickSize(0);
-          qtlYAxis = d3.svg.axis().scale(y).orient("left").ticks(5);
-          geneXAxis = d3.svg.axis().scale(x).orient("bottom").ticks(10)
-          .tickFormat(function(d) { 
-            return d3.format("s")(d) + "bp";
-          });
-          geneYAxis = d3.svg.axis().scale(geneY).orient("left").tickValues([]).tickSize(0);
-
-          var plotData = [];
-
-          for (var i = 0; i < xValues.length; i++) {
-            plotData.push({
-              x: xValues[i],
-              y: yValues[i],
-              color: colors[Math.floor(Math.random() * colors.length)].color,
-              radius: 5
-            });
-          }
-
-          var delay = 1250/ plotData.length;
-          scope.container.selectAll("g.xQTL").attr("transform", "translate(0, " + svgSize.height * 0.75 + ")").call(qtlXAxis);
-          scope.container.selectAll("g.yQTL").call(qtlYAxis);
-          scope.container.selectAll("g.xGene").attr("transform", "translate(0, " + svgSize.height + ")").call(geneXAxis);
-          scope.container.selectAll("g.yGene").call(geneYAxis);
-
-          circleDataset = scope.qtlContainer.selectAll(".masserror").data(plotData);
-          circleDataset.enter().append("circle").attr("class", "masserror");
-
-          circleDataset.attr("cy", function (d) {
-            return y(0);
-          }).style("fill", function(d) {
-            return d.color;
-          }).attr("cx", function (d) {
-            return x(d.x);
-          }).attr("r", function (d) {
-            return 7.5;
-          }).attr("opacity", 0).transition().delay(function(d, i) {
-            return i * delay;
-          }).duration(1250).attr("cy", function (d) {
-            return y(d.y);
-          }).attr("opacity", 1);
-
-          // remove unneeded circles
-          circleDataset.exit().remove();
-
-          circleDataset.on("mouseenter", function(d) {
-            d3.select(this).style("stroke", function (d, i) {
-              return "black";
-            }).attr("r", function () {
-              return 10;
-            });
-
-            tip.html(function () {
-              return "<strong style='font-style:italic;'>m/z:</strong> <span style='color:red'>" + d3.format(",.4f")(d.mz) + " </span><br><br>"
-                + "<strong>Relative Abundance:</strong> <span style='color:red'>" + d3.format("0.2f")(d.percentBasePeak) + "%</span><br><br>"
-                + "<strong>% TIC:</strong> <span style='color:red'>" + d3.format("0.2%")(d.intensity) + "</span>";
-            });
-            tip.show();
-          });
-
-          circleDataset.on("mouseleave", function(d) {
-            d3.select(this).style("stroke", "none").attr("r", function(d) {
-              return 7.5;
-            });
-            //tip.hide();
-          });
-        }
-      };
-
-      /**
-       * Watch model changes
-       */
-      scope.$watch('plotdata', scope.redraw, true);
-      scope.$watch('options', scope.setSvgSize);
-       
-      scope.initialize();
-    };
-     
-    return directive; 
-});
-
 // LOD PLOT that is actually rendering
 chartModule.directive("lodLineChart", function($log) {
     
@@ -459,11 +47,6 @@ chartModule.directive("lodLineChart", function($log) {
         scope.container.append("g")
           .attr("class", "xLod")
           .append("text")
-          .attr("class", "xLodLabel")
-          .attr("transform","translate(" + (svgSize.width/2) + " ," + (svgSize.margin.bottom - 5) + ")")
-          .text("Genomic Position");
-
-          $log.log(scope);
 
         scope.container.append("g")
           .attr("class", "yLod")
@@ -475,16 +58,24 @@ chartModule.directive("lodLineChart", function($log) {
           .attr("dy", "1em")
           .text("Logarithm of Odds");
 
-        /*
-        scope.container.append("text")
-          .attr("x", (svgSize.width / 2))             
-          .attr("y", 0 - (svgSize.margin.top / 2))
-          .attr("text-anchor", "middle")  
-          .style("font-size", "16px") 
-          .text("Consensus Plots");
-        */
+        // dummy top axis
+        scope.container.append("g")
+          .attr("class", "xBorder");
+
+        scope.container.append("g")
+          .attr("class", "yBorder");
+
+        // place a clip mask over the annotated spectrum container to prevent svg elements from displaying out of the SVG when zooming. 
+        scope.lodContainer.append("clipPath")
+          .attr("id", "lodClippy")
+          .append("rect")
+          .attr("x", "0")
+          .attr("y", "0")
+          .attr('width', svgSize.width - svgSize.width * svgSize.padding)
+          .attr('height', svgSize.height);
 
         scope.container.attr("transform", "translate(" + svgSize.margin.left + ", " + (svgSize.margin.top) +  ")")
+        scope.lodContainer.attr("clip-path", "url(#lodClippy)");
 
         scope.setSvgSize();
       };
@@ -493,7 +84,7 @@ chartModule.directive("lodLineChart", function($log) {
         var svgSize = scope.getSvgSize();
 
         scope.svg.attr('viewBox','0 0 '+ (svgSize.width + svgSize.margin.left + svgSize.margin.right) + ' ' +
-            (svgSize.height + svgSize.margin.top + svgSize.margin.bottom))
+            (svgSize.height  + svgSize.margin.bottom))
           //.attr('preserveAspectRatio','xMinYMin');
         scope.redraw();
       };
@@ -503,11 +94,11 @@ chartModule.directive("lodLineChart", function($log) {
       };
 
       scope.getX = function () {
-        return scope.plotdata.realLodPlot.x;
+        return scope.plotdata.lodPlot.x;
       };
 
       scope.getLodValues = function() {
-        return scope.plotdata.realLodPlot.y;
+        return scope.plotdata.lodPlot.y;
       };
 
       scope.getMax = function(alleleEffectPlots) {
@@ -533,6 +124,10 @@ chartModule.directive("lodLineChart", function($log) {
 
         return max - min;
       };
+
+      scope.getQtl = function() {
+      	return scope.plotdata.qtl;
+      }
 
       scope.formatLines = function(lineXArray, lineYArray) {
         var returnArray = [];
@@ -562,7 +157,7 @@ chartModule.directive("lodLineChart", function($log) {
 
       scope.drawGroups = function() {
         var x, y, lodXAxis, lodYAxis, lineDataset, xValues = scope.getX(), lodValues = scope.getLodValues(),
-          svgSize = scope.getSvgSize(); /*names = scope.getNames()*/
+          svgSize = scope.getSvgSize(), qtl = scope.getQtl(); /*names = scope.getNames()*/
 
         if (isNaN(d3.max(xValues))) {
           xValues = [0];
@@ -573,27 +168,73 @@ chartModule.directive("lodLineChart", function($log) {
 
         if (xValues && lodValues) {
           var xScaleFudgeFactor = (d3.max(xValues) - d3.min(xValues)) * .025;
-          var lodYScaleFudgeFactor = (d3.max(lodValues) - d3.min(lodValues)) * .1;
+          var lodYScaleFudgeFactor = (d3.max(lodValues) - d3.min(lodValues)) * .15;
 
-          x = d3.scale.linear().domain([d3.min(xValues) - xScaleFudgeFactor, d3.max(xValues) + xScaleFudgeFactor]).range([ 0, svgSize.width - svgSize.width * svgSize. padding]);
-          y = d3.scale.linear().domain([d3.min(lodValues) - lodYScaleFudgeFactor, d3.max(lodValues) + lodYScaleFudgeFactor]).range([ svgSize.height, 0 ]);
+          x = d3.scale.linear().domain([d3.min(xValues), d3.max(xValues)]).range([ 0, svgSize.width - svgSize.width * svgSize.padding]);
+          y = d3.scale.linear().domain([0, d3.max(lodValues) + lodYScaleFudgeFactor]).range([ svgSize.height, 0 ]);
 
-          xAxis = d3.svg.axis().scale(x).orient("bottom").ticks(5)
+          xAxis = d3.svg.axis().scale(x).orient("bottom").ticks(10)
           .tickFormat(function(d) { 
             return d3.format("s")(d) + "bp";
           });
 
           yAxis = d3.svg.axis().scale(y).orient("left").ticks(5);
+          xBorder = d3.svg.axis().scale(x).tickValues([]);
+					yBorder = d3.svg.axis().scale(y).orient("left").tickValues([]);
 
-          scope.container.selectAll("g.xLod").attr("transform", "translate(0, " + svgSize.height + ")").call(xAxis);
-          scope.container.selectAll("g.yLod").call(yAxis);
+          // dummy axes 
+          scope.container.selectAll("g.xBorder").attr("transform", "translate(0, 0)").call(xBorder);
+          scope.container.selectAll("g.yBorder").attr("transform", "translate(" + (svgSize.width - svgSize.width * svgSize.padding) +", 0)").call(yBorder);
 
-          line = d3.svg.line()
+          var line = d3.svg.line()
           .x(function(d) { 
             return x(d.x); })
           .y(function(d) { 
             return y(d.y); 
           }).interpolate("linear");
+
+	        var transitionLine = d3.svg.line()
+	        	.x(function(d) {
+	        		return x(d.x); 
+	        	}).y(function(d) {
+	        		return y(y.domain()[0]);
+	        	});
+
+	        if (xValues.length > 1) {
+	        	// add an extra vertical path to mark where the qtl is
+	          var baseLine = [{
+	            lineData: 
+	              [
+	                {x: (qtl.position - xScaleFudgeFactor * .2), y: y.domain()[1]}, 
+	                {x: (qtl.position), y: qtl.lod + (y.domain()[1] - y.domain()[0]) * .01},
+	                {x: (qtl.position + xScaleFudgeFactor * .2), y: y.domain()[1]}
+	              ],
+	            color: "#45CCBF",
+	            fill: "#cc6666"
+	          }];
+
+	          var vertLine = scope.lodContainer.selectAll(".qtlIndicator").data(baseLine);
+	        
+	          vertLine.enter().append("path").attr("class", "qtlIndicator");
+
+	          vertLine.style("stroke", function(d) {
+	            return d.color;
+	          }).style("fill", function(d) {
+	          	return d.fill;
+	          }).attr("opacity", 0)
+	          .attr("d", function(d) {
+	            return transitionLine(d.lineData); 
+	          })
+	          .transition()
+	          .duration(2000)
+	          .attr("opacity", 1)
+	          .attr("d", function(d) {
+	            return line(d.lineData); 
+	          });
+
+	          vertLine.exit().remove();
+	        }
+
           // convert all lines to points;
           var lodPoints = [];
 
@@ -601,19 +242,50 @@ chartModule.directive("lodLineChart", function($log) {
 
           plotData = scope.convertToPlotData(lodPoints, ["LOD"], ["#675EA8"]); 
 
-          lodDataset = scope.lodContainer.selectAll("path").attr("class", "line").data(plotData);
-          lodDataset.enter().append("path");
+          lodDataset = scope.lodContainer.selectAll(".line").data(plotData);
+          lodDataset.enter().append("path").attr("class", "line");
 
-          lodDataset.attr("d", function (d) {
-            return line(d.points);
-          }).attr('stroke-width', function(d) { 
+          lodDataset.attr('stroke-width', function(d) { 
             return 2; 
           }).attr('stroke', function(d) {
             return d.color; 
-          });
+          }).attr("d", function(d) {
+          	return transitionLine(d.points);
+          }).attr("opacity", .25)
+          .transition()
+          .duration(2000)
+          .attr("d", function(d) {
+          	return line(d.points);
+          }).attr("opacity", 1);
 
           // remove unneeded lines
           lodDataset.exit().remove();
+
+          // set a line for LOD = 6. Significance
+          // Define the points
+          var baseLine = [{
+            lineData: 
+              [
+                {x: x.domain()[0], y: 6}, 
+                {x: x.domain()[1], y: 6}
+              ],
+            color: "#777777"
+          }];
+
+          // draw the zero line
+          var significanceLine = scope.lodContainer.selectAll(".zeroline").data(baseLine);
+          significanceLine.enter().append("path").attr("class", "zeroline");
+
+          significanceLine.attr("d", function(d) {
+            return line(d.lineData); 
+          }).attr("opacity", 0).style("stroke", function(d) {
+            return d.color;
+          }).transition().duration(1500).attr("opacity", 1);
+
+          significanceLine.exit().remove();
+
+          scope.container.selectAll("g.xLod").attr("transform", "translate(0, " + svgSize.height + ")").call(xAxis);
+          scope.container.selectAll("g.yLod").call(yAxis);
         }
       };
 
@@ -630,7 +302,7 @@ chartModule.directive("lodLineChart", function($log) {
 });
 
 // allele effects and LOD curves
-chartModule.directive("consensusRegressions", function($log) {
+chartModule.directive("alleleEffectsChart", function($log) {
     
     /**
     * @description The directive variable used to the initiate the 2-way binding between this template and the controller
@@ -673,7 +345,7 @@ chartModule.directive("consensusRegressions", function($log) {
           .append("text")
           .attr("class", "xLodLabel")
           .attr("transform","translate(" + (svgSize.width/2) + " ," + (svgSize.margin.bottom - 5) + ")")
-          .text("Position");
+          .text("Genomic Position");
 
         scope.container.append("g")
           .attr("class", "yAllele")
@@ -683,9 +355,28 @@ chartModule.directive("consensusRegressions", function($log) {
           .attr("y", 0 - svgSize.margin.left)
           .attr("x", 0 - (svgSize.height * 1 / 2))
           .attr("dy", "1em")
-          .text("Allele Effect");          
+          .text("Allele Effect");
+
+        // dummy top axis
+        scope.container.append("g")
+          .attr("class", "xBorder")
+          .append("text");
+
+        scope.container.append("g")
+          .attr("class", "yBorder");
 
         scope.container.attr("transform", "translate(" + svgSize.margin.left + ", " + (svgSize.margin.top) +  ")")
+
+        scope.alleleContainer.append("clipPath")
+          .attr("id", "alleleClippy")
+          .append("rect")
+          .attr("x", "0")
+          .attr("y", "0")
+          .attr('width', svgSize.width - svgSize.width * svgSize.padding)
+          .attr('height', svgSize.height);
+
+        scope.container.attr("transform", "translate(" + svgSize.margin.left + ", " + (svgSize.margin.top) +  ")")
+        scope.alleleContainer.attr("clip-path", "url(#alleleClippy)");
 
         scope.setSvgSize();
       };
@@ -704,19 +395,19 @@ chartModule.directive("consensusRegressions", function($log) {
       };
 
       scope.getX = function () {
-        return scope.plotdata.realAlleleEffectPlots.x;
+        return scope.plotdata.alleleEffectPlots.x;
       };
 
       scope.getAlleleValues = function() {
-        return scope.plotdata.realAlleleEffectPlots.y;
+        return scope.plotdata.alleleEffectPlots.y;
       };
 
       scope.getNames = function() {
-        return scope.plotdata.realAlleleEffectPlots.names;
+        return scope.plotdata.alleleEffectPlots.names;
       };
 
       scope.getColors = function() {
-        return scope.plotdata.realAlleleEffectPlots.colors;
+        return scope.plotdata.alleleEffectPlots.colors;
       };
 
       scope.getMax = function(alleleEffectPlots) {
@@ -750,6 +441,10 @@ chartModule.directive("consensusRegressions", function($log) {
         return max - min;
       };
 
+      scope.getQtl = function() {
+      	return scope.plotdata.qtl;
+      }
+
       scope.formatLines = function(lineXArray, lineYArray) {
         var returnArray = [];
 
@@ -778,7 +473,7 @@ chartModule.directive("consensusRegressions", function($log) {
 
       scope.drawGroups = function() {
         var x, y, alleleXAxis, alleleYAxis, lineDataset, xValues = scope.getX(), alleleValues = scope.getAlleleValues(), colors = scope.getColors(), 
-          svgSize = scope.getSvgSize(), names = scope.getNames();
+          svgSize = scope.getSvgSize(), names = scope.getNames(), qtl = scope.getQtl();
 
         // if we have data defined
         if (xValues.length && alleleValues.length) {
@@ -786,18 +481,18 @@ chartModule.directive("consensusRegressions", function($log) {
           //var yScaleFudgeFactor = scope.getRange(alleleValues) * .1;
           var yDomain = d3.max([scope.getMax(alleleValues), Math.abs(scope.getMin(alleleValues))]);
 
-          var yScaleFudgeFactor = yDomain * .1;
+          var yScaleFudgeFactor = yDomain * .15;
 
-          x = d3.scale.linear().domain([d3.min(xValues) - xScaleFudgeFactor, d3.max(xValues) + xScaleFudgeFactor]).range([ 0, svgSize.width - svgSize.width * svgSize. padding]);
+          x = d3.scale.linear().domain([d3.min(xValues), d3.max(xValues)]).range([ 0, svgSize.width - svgSize.width * svgSize.padding]);
           y = d3.scale.linear().domain([-yDomain - yScaleFudgeFactor, yDomain + yScaleFudgeFactor]).range([ svgSize.height, 0]);
 
-          // max and min functions are busted as fuck
-
-          alleleXAxis = d3.svg.axis().scale(x).orient("bottom").ticks(5)
+          alleleXAxis = d3.svg.axis().scale(x).orient("bottom").ticks(10)
             .tickFormat(function(d) { 
               return d3.format("s")(d) + "bp";
             });
           alleleYAxis = d3.svg.axis().scale(y).orient("left").ticks(5);
+          xBorder = d3.svg.axis().scale(x).tickValues([]);
+					yBorder = d3.svg.axis().scale(y).orient("left").tickValues([]);
 
           var line = d3.svg.line()
           .x(function(d) { 
@@ -805,6 +500,52 @@ chartModule.directive("consensusRegressions", function($log) {
           .y(function(d) { 
             return y(d.y); 
           }).interpolate("linear");
+
+          var transitionLine = d3.svg.line()
+	        	.x(function(d) {
+	        		return x(d.x); 
+	        	}).y(function(d) {
+	        		return y(0);
+	        	});
+
+	        var transitionVertLine = d3.svg.line()
+	        	.x(function(d) {
+	        		return x(d.x); 
+	        	}).y(function(d) {
+	        		return y(y.domain()[1]);
+	        	});
+
+	        if (xValues.length > 1) {
+	        	// add an extra vertical path to mark where the qtl is
+	          var baseLine = [{
+	            lineData: [
+                {x: (qtl.position - xScaleFudgeFactor * .2), y: y.domain()[1]}, 
+                {x: (qtl.position), y: scope.getMax(alleleValues) + (y.domain()[1] - y.domain()[0]) * .05},
+                {x: (qtl.position + xScaleFudgeFactor * .2), y: y.domain()[1]}
+              ],
+	            fill: "#cc6666"
+	          }];
+
+	          var vertLine = scope.alleleContainer.selectAll(".zeroline").data(baseLine);
+	        
+	          vertLine.enter().append("path").attr("class", "zeroline");
+
+	          vertLine.style("stroke", function(d) {
+	            return d.color;
+	          }).style("fill", function(d) {
+	          	return d.fill;
+	          }).attr("opacity", 0)
+	          .attr("d", function(d) {
+	            return transitionVertLine(d.lineData); 
+	          }).transition()
+	          .duration(2000)
+	          .attr("opacity", 1)
+	          .attr("d", function(d) {
+	            return line(d.lineData); 
+	          });
+
+	          vertLine.exit().remove();
+	        }
 
           // convert all lines to points;
           var allelePoints = [];
@@ -815,25 +556,34 @@ chartModule.directive("consensusRegressions", function($log) {
 
           var plotData = scope.convertToPlotData(allelePoints, names, colors); 
 
-          scope.container.selectAll("g.xAllele").attr("transform", "translate(0, " + svgSize.height + ")").call(alleleXAxis);
-          scope.container.selectAll("g.yAllele").call(alleleYAxis);
+          // dummy axes 
+          scope.container.selectAll("g.xBorder").attr("transform", "translate(0, 0)").call(xBorder);
+          scope.container.selectAll("g.yBorder").attr("transform", "translate(" + (svgSize.width - svgSize.width * svgSize.padding) +", 0)").call(yBorder);
 
-          alleleDataset = scope.alleleContainer.selectAll("path").attr("class", "line").data(plotData);
-          alleleDataset.enter().append("path");
+          alleleDataset = scope.alleleContainer.selectAll(".line").data(plotData);
 
-          alleleDataset.attr("d", function (d) {
-            return line(d.points);
-          }).attr('stroke-width', function(d) { 
-            return 2; 
-          }).attr('stroke', function(d) {
-            return d.color; 
-          }).style('fill', "none");
+          alleleDataset.enter().append("path").attr("class", "line");
+
+          alleleDataset
+          	.attr('stroke', function(d) {
+            	return d.color; 
+          	}).attr("d", function(d) {
+          		return transitionLine(d.points);
+          	}).transition()
+          	.duration(2000)
+          	.attr("d", function(d) {
+          		return line(d.points);
+          	}).attr("opacity", 1);
 
           // remove unneeded lines
           alleleDataset.exit().remove();
-        } else {
 
-          x = d3.scale.linear().domain([0, 0]).range([ 0, svgSize.width - svgSize.width * svgSize. padding]);
+          scope.container.selectAll("g.xAllele").attr("transform", "translate(0, " + svgSize.height + ")").call(alleleXAxis);
+          scope.container.selectAll("g.yAllele").call(alleleYAxis);
+        } else {
+					// no data yet. just render axes.
+
+          x = d3.scale.linear().domain([0, 0]).range([ 0, svgSize.width - svgSize.width * svgSize.padding]);
           y = d3.scale.linear().domain([0, 0]).range([ svgSize.height, 0]);
 
           alleleXAxis = d3.svg.axis().scale(x).orient("bottom").ticks(5)
@@ -841,9 +591,15 @@ chartModule.directive("consensusRegressions", function($log) {
               return d3.format("s")(d) + "bp";
             });
           alleleYAxis = d3.svg.axis().scale(y).orient("left").ticks(5);
+          xBorder = d3.svg.axis().scale(x).tickValues([]);
+					yBorder = d3.svg.axis().scale(y).orient("left").tickValues([]);
 
           scope.container.selectAll("g.xAllele").attr("transform", "translate(0, " + svgSize.height + ")").call(alleleXAxis);
           scope.container.selectAll("g.yAllele").call(alleleYAxis);
+
+          // dummy axes 
+          scope.container.selectAll("g.xBorder").attr("transform", "translate(0, 0)").call(xBorder);
+          scope.container.selectAll("g.yBorder").attr("transform", "translate(" + (svgSize.width - svgSize.width * svgSize.padding) +", 0)").call(yBorder);
         }        
       };
       
@@ -858,3 +614,379 @@ chartModule.directive("consensusRegressions", function($log) {
      
     return directive; 
 });
+
+// allele effects and LOD curves
+chartModule.directive("genes", function($log) {
+    
+    /**
+    * @description The directive variable used to the initiate the 2-way binding between this template and the controller
+    * @property {string} directive.restrict - Restricts the directive to attribute and elements only
+    * @property {object} directive.scope - Holds objects containing spectral data, peptide data, and visualization settings
+    * @property {object} directive.scope.plotdata - Contains the numerical, ordinal, and categorical data required to generate the visualization
+    * @property {object} directive.scope.peptide - Contains ms2 scan number, peptide sequence, precursor mz, charge, and modifications
+    * @property {object} directive.scope.settings - Contains tolerance type (ppm/Da), tolerance threshold, and ionization mode
+    */
+    var directive = {
+      restrict: 'AE',
+      scope: {
+        plotdata: '=?',
+        svgsize: '=?'
+      }
+    };
+
+    var tip = d3.tip()
+      .attr('class', 'd3-tip')
+      .offset([-15, 0]);
+
+    /**
+    * @description Links the IPSA directive to the annotatedSpectrum HTML tag and retrieves the tag attributes.
+    */
+    directive.link = function(scope, elements, attr) {
+
+      scope.getSvgSize = function () {
+        return scope.svgsize;
+      }
+
+      scope.initialize = function() {
+        var svgSize = scope.getSvgSize();
+
+        // create svg element to hold charts
+        scope.svg = d3.select(elements[0]).append("svg").attr("class", "chart");
+
+        // main svg container to hold spectrum annotations
+        scope.container = scope.svg.append("g");
+
+        scope.geneContainer = scope.container.append("g").attr("id", "geneContainer");
+        
+        scope.geneContainer.call(tip);
+
+        scope.container.append("g")
+          .attr("class", "xGene")
+          .append("text")
+          .attr("class", "xGeneLabel")
+          .attr("transform","translate(" + (svgSize.width/2) + " ," + (svgSize.margin.bottom - 5) + ")")
+          .text("Genomic Position");
+
+        var axisHolder = scope.container.append("g")
+          .attr("class", "yGene");
+
+        axisHolder.append("text")
+          .attr("class", "yGeneLabel")
+          .attr("transform", "rotate(-90)")
+          .attr("y", 0 - svgSize.margin.left)
+          .attr("x", 0 - (svgSize.height * 1 / 2))
+          .attr("dy", "2em")
+          .text("Genes");
+
+        axisHolder.append("text")
+          .attr("class", "yGeneLabel")
+          .attr("transform", "rotate(-90)")
+          .attr("y", 0 - svgSize.margin.left)
+          .attr("x", 0 - (svgSize.height * 1 / 2))
+          .attr("dy", "3.2em")
+          .text("(\u00B11 Mbp From QTL)");
+
+        // dummy top axis
+        scope.container.append("g")
+          .attr("class", "xBorder")
+          .append("text");
+
+        scope.container.append("g")
+          .attr("class", "yBorder");
+
+        // place a clip mask over the annotated spectrum container to prevent svg elements from displaying out of the SVG when zooming. 
+        scope.geneContainer.append("clipPath")
+          .attr("id", "geneClippy")
+          .append("rect")
+          .attr("x", "0")
+          .attr("y", "0")
+          .attr('width', svgSize.width - svgSize.width * svgSize.padding)
+          .attr('height', svgSize.height);
+
+        scope.container.attr("transform", "translate(" + svgSize.margin.left + ", " + (svgSize.margin.top) +  ")")
+        scope.geneContainer.attr("clip-path", "url(#geneClippy)");
+
+        scope.setSvgSize();
+      };
+       
+      scope.setSvgSize = function() {
+        var svgSize = scope.getSvgSize();
+
+        scope.svg.attr('viewBox','0 0 '+ (svgSize.width + svgSize.margin.left + svgSize.margin.right) + ' ' +
+            (svgSize.height + svgSize.margin.top + svgSize.margin.bottom))
+          //.attr('preserveAspectRatio','xMinYMin');
+        scope.redraw();
+      };
+
+      scope.redraw = function() {
+        scope.drawGroups();
+      };
+
+      scope.getXValues = function() {
+        if (scope.plotdata.lodPlot.x.length == 0) {
+          return [];
+        } else {
+          return scope.plotdata.lodPlot.x;
+        }
+      };
+
+      scope.getGenes = function () {
+        return scope.plotdata.genes;
+      };
+
+      scope.getQtl = function() {
+        return scope.plotdata.qtl;
+      }
+
+      scope.testFilter = function(genes, qtl) {
+        var returnArray = [];
+
+        genes.forEach(function(d) {
+          if ((d.start < (qtl.position + 1000000) && d.start > (qtl.position - 1000000)) || (d.end <= (qtl.position + 1000000) && d.end >= (qtl.position - 1000000))) {
+            returnArray.push(d);
+          }
+        });
+
+        return returnArray;
+      };
+
+      scope.orderGenes = function(geneList) {
+        if (geneList.length === 0) {
+          return [];
+        }
+
+        var returnArray = [[geneList[0]]];
+
+        for (var i = 1; i < geneList.length; i++) {
+          var j = 0;
+
+          while (true) {
+            if (scope.collides(geneList[i], returnArray, j)) {
+              j++;
+
+              if (returnArray.length == j) {
+                returnArray.push([]);
+              }
+            } else {
+              returnArray[j].push(geneList[i]);
+              break;
+            }
+          }
+        }
+
+        return returnArray;
+      };
+
+      scope.collides = function(gene, orderedList, level) {
+        if (orderedList[level].length == 0) {
+          return false;
+        }
+
+        var placedGene = orderedList[level].slice(-1)[0];
+
+        if (gene.start <= placedGene.stop + 20000) {
+          return true;
+        } else {
+          return false;
+        }
+      }
+
+      scope.layerGenes = function(orderedGenes) {
+        var returnArray = [];
+
+        for (var i = 0; i < orderedGenes.length; i++) {
+          orderedGenes[i].forEach(function(d) {
+            returnArray.push({
+              gene: d,
+              level: i
+            });
+          });
+        }
+
+        returnArray.sort(function(a, b) {
+          return a.gene.start - b.gene.start;
+        });
+
+        return returnArray;
+      }
+
+      scope.getMaxLayer = function(layeredGenes) {
+        var returnValue = 0;
+
+        layeredGenes.forEach(function(d) {
+          if (returnValue < d.level) {
+            returnValue = d.level;
+          }
+        });
+
+        return returnValue + 1.5;
+      }
+
+      scope.formatPosition = function(genePosition) {
+        var prefix = d3.formatPrefix(genePosition);
+
+        return d3.round(prefix.scale(genePosition), 3) + " " + prefix.symbol + "bp";
+      }
+
+      scope.drawGroups = function() {
+        var x, y, geneXAxis, geneYAxis, xValues = scope.getXValues(), qtl = scope.getQtl(), genes = scope.testFilter(scope.getGenes(), qtl), 
+          svgSize = scope.getSvgSize(), plottableGenes = scope.layerGenes(scope.orderGenes(genes)), maxLayer = scope.getMaxLayer(plottableGenes);
+
+        genes.sort(function(a, b) {
+          return a.start - b.start;
+        });
+
+        // if we have data defined
+        if (genes.length) {
+          x = d3.scale.linear().domain([qtl.position - 1000000, qtl.position + 1000000]).range([ 0, svgSize.width - svgSize.width * svgSize.padding]);
+          y = d3.scale.linear().domain([0, maxLayer]).range([0, svgSize.height]);
+
+          geneXAxis = d3.svg.axis().scale(x).orient("bottom").ticks(10)
+            .tickFormat(function(d) { 
+              return d3.format("s")(d + " ") + "bp";
+            });
+          geneYAxis = d3.svg.axis().scale(y).orient("left").tickValues([]);
+          xBorder = d3.svg.axis().scale(x).tickValues([]);
+          yBorder = d3.svg.axis().scale(y).orient("left").tickValues([]);
+
+          var plotData = genes;
+
+          // dummy axes 
+          scope.container.selectAll("g.xBorder").attr("transform", "translate(0, 0)").call(xBorder);
+          scope.container.selectAll("g.yBorder").attr("transform", "translate(" + (svgSize.width - svgSize.width * svgSize.padding) +", 0)").call(yBorder);
+
+          // set a line to mark QTL location
+          var line = d3.svg.line()
+          .x(function(d) { 
+            return x(d.x); })
+          .y(function(d) { 
+            return y(d.y); 
+          }).interpolate("linear");
+
+          // Define the points
+          var baseLine = [{
+            lineData: 
+              [
+                {x: qtl.position, y: y.domain()[0]}, 
+                {x: qtl.position, y: y.domain()[1]}
+              ],
+            color: "#777777",
+            strokeWidth: 3
+          }];
+
+          // draw the zero line
+          var qtlMarker = scope.geneContainer.selectAll(".zeroline").data(baseLine);
+         qtlMarker.enter().append("path").attr("class", "zeroline");
+
+          qtlMarker.attr("d", function(d) {
+            return line(d.lineData); 
+          }).attr("opacity", 0)
+            .style("stroke", function(d) {
+            return d.color;
+          }).style("stroke-width", function(d) {
+            return d.strokeWidth;
+          }).transition()
+            .duration(1500)
+            .attr("opacity", 1);
+
+          qtlMarker.exit().remove();
+
+          geneDataset = scope.geneContainer.selectAll(".gene").data(plottableGenes);
+
+          geneDataset.enter().append("rect").attr("class", "gene").attr("opacity", 0);
+
+          geneDataset.attr("opacity", 0)
+          .attr('fill', function(d) {
+              if (d.gene.strand === "+") {
+                return "#823030";
+              } else {
+                return "#675EA8";
+              }
+            }).attr("x", function(d) {
+              return x(d.gene.start);
+            }).attr("y", function(d, i) {
+              return y(d.level + 0.5);
+            }).attr("height", 15)
+              .attr("width", function(d) {
+              var width = x(d.gene.stop) - x(d.gene.start);
+              if (width < 7.5) {
+                return 7.5;
+              } else {
+                return width;
+              }
+            }).attr("rx", 7.5)
+              .attr("ry",7.5)
+              .attr("opacity", 1);
+          
+          // remove unneeded lines
+          geneDataset.exit().attr("opacity", 0).remove();
+
+          scope.container.selectAll("g.xGene").attr("transform", "translate(0, " + svgSize.height + ")").call(geneXAxis);
+          scope.container.selectAll("g.yGene").call(geneYAxis);
+
+          geneDataset.on("mouseenter", function(d) {
+
+            // highlight the peak that is being hovered over using a black stroke
+            d3.select(this).style("stroke", function (d, i) {
+              return "black";
+            });
+
+            // define the inner HTML of the tooltip
+            tip.html(function () {
+              let tipText = "<strong style='color: #31c4ae'>Gene Name:</strong> <span style='color: #e8e8e8'>" + d.gene.name + " </span><br><br>"
+                              + "<strong style='color: #31c4ae'>Start:</strong> <span style='color: #e8e8e8'>" + scope.formatPosition(d.gene.start) + " </span>"
+                              + "<strong style='color: #31c4ae'>Stop:</strong> <span style='color: #e8e8e8'>" + scope.formatPosition(d.gene.stop) + "</span><br><br>"
+                              + "<strong style='color: #31c4ae'>Gene Length:</strong> <span style='color: #e8e8e8'>" + scope.formatPosition(d.gene.stop - d.gene.start) + "</span><br><br>";
+                          /*  
+                              + "<strong style='color: #31c4ae'>Start:</strong> <span style='color: #e8e8e8'>" + d3.format("s")(d.start) + "bp </span>"
+                              + "<strong style='color: #31c4ae'>Stop:</strong> <span style='color: #e8e8e8'>" + d3.format("s")(d.stop) + "bp</span><br><br>"
+                              + "<strong style='color: #31c4ae'>Gene Length:</strong> <span style='color: #e8e8e8'>" + d3.format("s")(d.stop - d.start) + "bp</span><br><br>";
+                          */
+                return tipText;
+            });
+
+            // show the tooltip
+            tip.show();
+          });
+
+          // remove the stroke added on mouse-in and hide the tooltip
+          geneDataset.on("mouseleave", function() {
+            d3.select(this).style("stroke", "none");
+            tip.hide();
+          });
+
+        } else {
+          // no data yet. just render axes.
+
+          x = d3.scale.linear().domain([0, 0]).range([0, svgSize.width - svgSize.width * svgSize.padding]);
+          y = d3.scale.linear().domain([0, 0]).range([0, svgSize.height]);
+
+          geneXAxis = d3.svg.axis().scale(x).orient("bottom").ticks(5)
+            .tickFormat(function(d) { 
+              return d3.format("s")(d) + "bp";
+            });
+          geneYAxis = d3.svg.axis().scale(y).orient("left").ticks(5);
+          xBorder = d3.svg.axis().scale(x).tickValues([]);
+          yBorder = d3.svg.axis().scale(y).orient("left").tickValues([]);
+
+          scope.container.selectAll("g.xGene").attr("transform", "translate(0, " + svgSize.height + ")").call(geneXAxis);
+          scope.container.selectAll("g.yGene").call(geneYAxis);
+
+          // dummy axes 
+          scope.container.selectAll("g.xBorder").attr("transform", "translate(0, 0)").call(xBorder);
+          scope.container.selectAll("g.yBorder").attr("transform", "translate(" + (svgSize.width - svgSize.width * svgSize.padding) +", 0)").call(yBorder);
+        }        
+      };
+      
+      /**
+       * Watch model changes
+       */
+      scope.$watch('plotdata', scope.redraw, true);
+      scope.$watch('options', scope.setSvgSize);
+       
+      scope.initialize();
+    };
+     
+    return directive; 
+});
+
