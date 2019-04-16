@@ -24,6 +24,10 @@ chartModule.directive("lodLineChart", function($log) {
       }
     };
 
+    var tip = d3.tip()
+      .attr('class', 'd3-tip')
+      .offset([-15, 0]);
+
     /**
     * @description Links the IPSA directive to the annotatedSpectrum HTML tag and retrieves the tag attributes.
     */
@@ -44,9 +48,19 @@ chartModule.directive("lodLineChart", function($log) {
 
         scope.lodContainer = scope.container.append("g").attr("id", "lodContainer");
 
+        scope.lodMouseover = scope.container.append("rect")
+          .attr("id", "lodMouseover")
+          .attr("fill", "none")
+          .attr("x", "0")
+          .attr("y", "0")
+          .attr("pointer-events", "all")
+          .attr('width', svgSize.width - svgSize.width * svgSize.padding)
+          .attr('height', svgSize.height);
+
+        scope.lodMouseover.call(tip);
+        
         scope.container.append("g")
           .attr("class", "xLod")
-          .append("text")
 
         scope.container.append("g")
           .attr("class", "yLod")
@@ -56,7 +70,7 @@ chartModule.directive("lodLineChart", function($log) {
           .attr("y", 0 - svgSize.margin.left)
           .attr("x", 0 - (svgSize.height * 1 / 2))
           .attr("dy", "1em")
-          .text("Logarithm of Odds");
+          .text("LOD Score");
 
         // dummy top axis
         scope.container.append("g")
@@ -129,6 +143,12 @@ chartModule.directive("lodLineChart", function($log) {
       	return scope.plotdata.qtl;
       }
 
+      scope.formatPosition = function(genePosition) {
+        var prefix = d3.formatPrefix(genePosition);
+
+        return d3.round(prefix.scale(genePosition), 3) + " " + prefix.symbol + "bp";
+      }
+
       scope.formatLines = function(lineXArray, lineYArray) {
         var returnArray = [];
 
@@ -173,11 +193,7 @@ chartModule.directive("lodLineChart", function($log) {
           x = d3.scale.linear().domain([d3.min(xValues), d3.max(xValues)]).range([ 0, svgSize.width - svgSize.width * svgSize.padding]);
           y = d3.scale.linear().domain([0, d3.max(lodValues) + lodYScaleFudgeFactor]).range([ svgSize.height, 0 ]);
 
-          xAxis = d3.svg.axis().scale(x).orient("bottom").ticks(10)
-          .tickFormat(function(d) { 
-            return d3.format("s")(d) + "bp";
-          });
-
+          xAxis = d3.svg.axis().scale(x).orient("bottom").tickValues([]);
           yAxis = d3.svg.axis().scale(y).orient("left").ticks(5);
           xBorder = d3.svg.axis().scale(x).tickValues([]);
 					yBorder = d3.svg.axis().scale(y).orient("left").tickValues([]);
@@ -260,6 +276,31 @@ chartModule.directive("lodLineChart", function($log) {
 
           // remove unneeded lines
           lodDataset.exit().remove();
+          
+          // add invisible circles to use as a 'focus' when hovering over the plot
+          var circleData = plotData[0];
+
+          var circleDataset = scope.lodContainer.selectAll(".circle").data(circleData.points);
+
+          circleDataset.enter().append("circle").attr("class", "circle");
+
+          circleDataset.attr("opacity", 0)
+          .attr('r', function(d) { 
+            return 5; 
+          }).attr('stroke-width', function(d) { 
+            return 2; 
+          }).attr('stroke', function(d) {
+            return "#675EA8"; 
+          }).attr('fill', function(d) {
+            return "#e57777"; 
+          }).attr("cx", function(d) {
+            return x(d.x);
+          }).attr("cy", function(d) {
+            return y(d.y);
+          });
+
+          // remove unneeded lines
+          circleDataset.exit().remove();
 
           // set a line for LOD = 6. Significance
           // Define the points
@@ -284,15 +325,102 @@ chartModule.directive("lodLineChart", function($log) {
 
           significanceLine.exit().remove();
 
+          // add text element for qtl
+          var qtlText = scope.lodContainer.selectAll(".qtlLabel").data([qtl]);
+
+          if (qtl.hasOwnProperty("position")) {
+            qtlText.enter().append("text").attr("class", "qtlLabel");
+
+            qtlText.attr("opacity", 0)
+            .attr("x", function(d) {
+              if (d.position > (x.domain()[1] - x.domain()[0]) / 2) {
+                return x(d.position) - 33; 
+              } else {
+                return x(d.position) + 9; 
+              }
+            }).attr("y", function(d) {
+              return y(y.domain()[0]); 
+            }).text("QTL")
+            .transition()
+            .duration(1750)
+            .attr("y", function(d) {
+              return y(y.domain()[1] * .90); 
+            })
+            .attr("opacity", 1);
+          }
+
+          qtlText.exit().remove();
+
           scope.container.selectAll("g.xLod").attr("transform", "translate(0, " + svgSize.height + ")").call(xAxis);
           scope.container.selectAll("g.yLod").call(yAxis);
+
+          // bind event handlers to our mouseover box to track what point of the LOD curve should be highlighted.
+          scope.lodMouseover.on("mouseout", function() {
+            circleDataset.attr("opacity", function(d, i) {
+              return 0;
+            });
+
+            tip.hide();
+          }).on("mousemove", function() {
+            // get the x svg coordinate of the mouse
+            var xCoordinate = d3.mouse(this)[0];
+
+            // translate it into our domain coordinates
+            var translatedCoordinate = x.invert(xCoordinate);
+            
+            var circles = circleDataset[0];
+
+            var targetCircle = {
+              x: Number.MIN_VALUE,
+              y: Number.MIN_VALUE,
+              delta: Number.MAX_VALUE, 
+              i: -1
+            };
+
+            // get closest circle to the mouse's x coordinate
+            for (var i = 0; i < circleData.points.length; i++) {
+              var delta = Math.abs(circleData.points[i].x - translatedCoordinate);
+
+              if (delta < targetCircle.delta) {
+                targetCircle.x = circleData.points[i].x;
+                targetCircle.y = circleData.points[i].y;
+                targetCircle.i = i;
+                targetCircle.delta = delta;
+              }
+            }
+
+            // define the inner HTML of the tooltip
+            tip.html(function () {
+
+              let tipText = "<strong style='color: #31c4ae'>Position:</strong> <span style='color: #e8e8e8'>" + scope.formatPosition(targetCircle.x) + " </span><br><br>"
+                              + "<strong style='color: #31c4ae'>Logarithm Of Odds Score:</strong> <span style='color: #e8e8e8'>" + d3.format(".3f")(targetCircle.y) + " </span>";
+                return tipText;
+            });
+
+            circleDataset.attr("opacity", function(d, i) {
+              if (i == targetCircle.i) {
+                tip.show(d, circles[i]);
+                return 1;
+              } else {
+                return 0;
+              }
+            });
+          });
         }
+      };
+
+      scope.handleMouseOut = function() {
+        circleDataset.attr("opacity", function(d, i) {
+          return 0;
+        });
+
+        tip.hide();
       };
 
       /**
        * Watch model changes
        */
-      scope.$watch('plotdata', scope.redraw, true);
+      scope.$watch('plotdata.lodPlot', scope.redraw, true);
       scope.$watch('options', scope.setSvgSize);
        
       scope.initialize();
@@ -320,6 +448,10 @@ chartModule.directive("alleleEffectsChart", function($log) {
       }
     };
 
+    var tip = d3.tip()
+      .attr('class', 'd3-tip')
+      .offset([-15, 0]);
+
     /**
     * @description Links the IPSA directive to the annotatedSpectrum HTML tag and retrieves the tag attributes.
     */
@@ -339,6 +471,17 @@ chartModule.directive("alleleEffectsChart", function($log) {
         scope.container = scope.svg.append("g");
 
         scope.alleleContainer = scope.container.append("g").attr("id", "alleleContainer");
+
+        scope.alleleMouseover = scope.container.append("rect")
+          .attr("id", "alleleMouseover")
+          .attr("fill", "none")
+          .attr("x", "0")
+          .attr("y", "0")
+          .attr("pointer-events", "all")
+          .attr('width', svgSize.width - svgSize.width * svgSize.padding)
+          .attr('height', svgSize.height);
+
+        scope.alleleMouseover.call(tip);
 
         scope.container.append("g")
           .attr("class", "xAllele")
@@ -471,6 +614,12 @@ chartModule.directive("alleleEffectsChart", function($log) {
         return returnArray;
       }
 
+      scope.formatPosition = function(genePosition) {
+        var prefix = d3.formatPrefix(genePosition);
+
+        return d3.round(prefix.scale(genePosition), 3) + " " + prefix.symbol + "bp";
+      }
+
       scope.drawGroups = function() {
         var x, y, alleleXAxis, alleleYAxis, lineDataset, xValues = scope.getX(), alleleValues = scope.getAlleleValues(), colors = scope.getColors(), 
           svgSize = scope.getSvgSize(), names = scope.getNames(), qtl = scope.getQtl();
@@ -578,6 +727,132 @@ chartModule.directive("alleleEffectsChart", function($log) {
           // remove unneeded lines
           alleleDataset.exit().remove();
 
+          // add text element for qtl
+          var qtlText = scope.alleleContainer.selectAll(".qtlLabel").data([qtl]);
+
+          if (qtl.hasOwnProperty("position")) {
+            qtlText.enter().append("text").attr("class", "qtlLabel");
+
+            qtlText.attr("opacity", 0)
+            .attr("x", function(d) {
+              if (d.position > (x.domain()[1] - x.domain()[0]) / 2) {
+                return x(d.position) - 33; 
+              } else {
+                return x(d.position) + 9; 
+              }
+            }).attr("y", function(d) {
+              return y(y.domain()[0]); 
+            }).text("QTL")
+            .transition()
+            .duration(1750)
+            .attr("y", function(d) {
+              return y(y.domain()[1] * .80); 
+            })
+            .attr("opacity", 1);
+          }
+
+          qtlText.exit().remove();
+
+          var markerLine = [{
+            lineData: 
+              [
+                {x: 0, y: y.domain()[0]}, 
+                {x: 0, y: y.domain()[1]}
+              ],
+            color: "#675EA8",
+            strokeWidth: 3
+          }];
+
+          var interactiveMarker = scope.alleleContainer.selectAll(".markerline").data(markerLine);
+
+          interactiveMarker.enter().append("path").attr("class", "markerline");
+
+          interactiveMarker.attr("d", function(d) {
+            return line(d.lineData); 
+          }).attr("opacity", 0)
+            .style("stroke", function(d) {
+            return d.color;
+          }).style("stroke-width", function(d) {
+            return d.strokeWidth;
+          });
+
+          interactiveMarker.exit().remove();
+
+          // bind event handlers to our mouseover box to track what point of the LOD curve should be highlighted.
+          scope.alleleMouseover.on("mouseout", function() {
+            tip.hide();
+            interactiveMarker.attr("opacity", 0);
+          }).on("mousemove", function() {
+            // get the x svg coordinate of the mouse
+            var xCoordinate = d3.mouse(this)[0];
+
+            // translate it into our domain coordinates
+            var translatedCoordinate = x.invert(xCoordinate);
+
+            markerLine[0].lineData = [
+              {x: translatedCoordinate, y: y.domain()[0]}, 
+              {x: translatedCoordinate, y: y.domain()[1]}
+            ];
+
+            // update data and line position
+            interactiveMarker.data(markerLine)
+            .attr("d", function(d) {
+              return line(d.lineData); 
+            }).attr("opacity", 1);
+
+            var targetPoint = {
+              x: Number.MIN_VALUE,
+              delta: Number.MAX_VALUE, 
+              i: -1
+            };
+
+            // get closest data point to the mouse's x coordinate
+            for (var i = 0; i < xValues.length; i++) {
+              var delta = Math.abs(xValues[i] - translatedCoordinate);
+
+              if (delta < targetPoint.delta) {
+                targetPoint.x = xValues[i];
+                targetPoint.i = i;
+                targetPoint.delta = delta;
+              }
+            }
+
+            // now get values for tooltip html
+            var tooltipValues = [
+              { strain: "A/J", alleleEffect: alleleValues[0].alleleEffects[targetPoint.i], color: colors[0] },
+              { strain: "C57BL/6J", alleleEffect: alleleValues[1].alleleEffects[targetPoint.i], color: colors[1] },
+              { strain: "129S1/SvImJ", alleleEffect: alleleValues[2].alleleEffects[targetPoint.i], color: colors[2] },
+              { strain: "NOD/ShiLtJ", alleleEffect: alleleValues[3].alleleEffects[targetPoint.i], color: colors[3] },
+              { strain: "NZO/LtJ", alleleEffect: alleleValues[4].alleleEffects[targetPoint.i], color: colors[4] },
+              { strain: "CAST/EiJ", alleleEffect: alleleValues[5].alleleEffects[targetPoint.i], color: colors[5] },
+              { strain: "PWK/PhJ", alleleEffect: alleleValues[6].alleleEffects[targetPoint.i], color: colors[6] },
+              { strain: "WSB/EiJ", alleleEffect: alleleValues[7].alleleEffects[targetPoint.i], color: colors[7] }
+            ];
+
+            // define the inner HTML of the tooltip
+            tip.html(function () {
+              var formattedStrains = "";
+
+              for (var i = 0; i < 8; i++) {
+
+                formattedStrains += "<strong style='color: " + tooltipValues[i].color +  "'>&nbsp;&nbsp;&nbsp;&nbsp;" + tooltipValues[i].strain + ": </strong> ";
+                formattedStrains += "<span style='color: #e8e8e8'>" + d3.format(".4f")(tooltipValues[i].alleleEffect) + "</span>"
+
+                if (i < 7) {
+                  formattedStrains += "<br>";
+                }
+              }
+
+              let tipText = "<strong style='color: #31c4ae'>Position:</strong> <span style='color: #e8e8e8'>" + scope.formatPosition(targetPoint.x) + " </span><br><br>"
+                              + "<strong style='color: #31c4ae'>Mice Strain Allele Effects:</strong><br>"
+                              + formattedStrains;
+
+              return tipText;
+            });
+
+            tip.show(markerLine,interactiveMarker[0][0]);
+          });
+
           scope.container.selectAll("g.xAllele").attr("transform", "translate(0, " + svgSize.height + ")").call(alleleXAxis);
           scope.container.selectAll("g.yAllele").call(alleleYAxis);
         } else {
@@ -606,7 +881,7 @@ chartModule.directive("alleleEffectsChart", function($log) {
       /**
        * Watch model changes
        */
-      scope.$watch('plotdata', scope.redraw, true);
+      scope.$watch('plotdata.alleleEffectPlots', scope.redraw, true);
       scope.$watch('options', scope.setSvgSize);
        
       scope.initialize();
@@ -617,15 +892,7 @@ chartModule.directive("alleleEffectsChart", function($log) {
 
 // allele effects and LOD curves
 chartModule.directive("genes", function($log) {
-    
-    /**
-    * @description The directive variable used to the initiate the 2-way binding between this template and the controller
-    * @property {string} directive.restrict - Restricts the directive to attribute and elements only
-    * @property {object} directive.scope - Holds objects containing spectral data, peptide data, and visualization settings
-    * @property {object} directive.scope.plotdata - Contains the numerical, ordinal, and categorical data required to generate the visualization
-    * @property {object} directive.scope.peptide - Contains ms2 scan number, peptide sequence, precursor mz, charge, and modifications
-    * @property {object} directive.scope.settings - Contains tolerance type (ppm/Da), tolerance threshold, and ionization mode
-    */
+
     var directive = {
       restrict: 'AE',
       scope: {
@@ -656,6 +923,17 @@ chartModule.directive("genes", function($log) {
         // main svg container to hold spectrum annotations
         scope.container = scope.svg.append("g");
 
+        // invisible rectangle placed over the X axis and chart area used to catch zoom events.
+        // place this first to make sure it doesn't prevent genes from catching events.
+        scope.zoomX = scope.container.append("rect")
+          .attr("id", "xZoom")
+          .attr("fill", "none")
+          .attr("x", "0")
+          .attr("y", "0")
+          .attr("pointer-events", "all")
+          .attr('width', svgSize.width - svgSize.width * svgSize.padding)
+          .attr('height', svgSize.height + svgSize.margin.bottom);
+
         scope.geneContainer = scope.container.append("g").attr("id", "geneContainer");
         
         scope.geneContainer.call(tip);
@@ -684,7 +962,7 @@ chartModule.directive("genes", function($log) {
           .attr("y", 0 - svgSize.margin.left)
           .attr("x", 0 - (svgSize.height * 1 / 2))
           .attr("dy", "3.2em")
-          .text("(\u00B11 Mbp From QTL)");
+          .text("(\u00B11.5 Mbp From QTL)");
 
         // dummy top axis
         scope.container.append("g")
@@ -722,6 +1000,10 @@ chartModule.directive("genes", function($log) {
         scope.drawGroups();
       };
 
+      scope.genomicResolution = function() {
+        return 1500000;
+      };
+
       scope.getXValues = function() {
         if (scope.plotdata.lodPlot.x.length == 0) {
           return [];
@@ -734,15 +1016,20 @@ chartModule.directive("genes", function($log) {
         return scope.plotdata.genes;
       };
 
+      scope.getSnps = function () {
+        return scope.plotdata.snps;
+      };
+
       scope.getQtl = function() {
         return scope.plotdata.qtl;
       }
 
-      scope.testFilter = function(genes, qtl) {
+      scope.filterGenes = function(genes, qtl) {
         var returnArray = [];
 
         genes.forEach(function(d) {
-          if ((d.start < (qtl.position + 1000000) && d.start > (qtl.position - 1000000)) || (d.end <= (qtl.position + 1000000) && d.end >= (qtl.position - 1000000))) {
+          if ((d.start < (qtl.position + scope.genomicResolution()) && d.start > (qtl.position - scope.genomicResolution())) || 
+              (d.end <= (qtl.position + scope.genomicResolution()) && d.end >= (qtl.position - scope.genomicResolution()))) {
             returnArray.push(d);
           }
         });
@@ -798,7 +1085,8 @@ chartModule.directive("genes", function($log) {
           orderedGenes[i].forEach(function(d) {
             returnArray.push({
               gene: d,
-              level: i
+              level: i,
+              snps: []
             });
           });
         }
@@ -822,6 +1110,40 @@ chartModule.directive("genes", function($log) {
         return returnValue + 1.5;
       }
 
+      scope.associateSnps = function(layeredGenes, snps) {
+        snps.forEach(function(snp) {
+          for (var i = 0; i < layeredGenes.length; i++) {
+            var layer = layeredGenes[i];
+            // too far. stop iterating
+            if (snp.position < layer.gene.start) {
+              break;
+            } else {
+              if (snp.position <= layer.gene.stop) {
+                layer.snps.push(snp);
+              }
+            }
+          };
+        });
+
+        $log.log(layeredGenes);
+      }
+
+      scope.extractUniqueSnpDescriptions = function(snps) {
+        var returnList = [];
+
+        snps.forEach(function(snp) {
+          var splitSnps = snp.csq.split(",");
+
+          splitSnps.forEach(function(splitSnp){ 
+            if (!returnList.includes(splitSnp)) {
+              returnList.push(splitSnp);
+            }
+          });
+        });
+
+        return returnList;
+      }
+
       scope.formatPosition = function(genePosition) {
         var prefix = d3.formatPrefix(genePosition);
 
@@ -829,8 +1151,10 @@ chartModule.directive("genes", function($log) {
       }
 
       scope.drawGroups = function() {
-        var x, y, geneXAxis, geneYAxis, xValues = scope.getXValues(), qtl = scope.getQtl(), genes = scope.testFilter(scope.getGenes(), qtl), 
+        var x, y, geneXAxis, geneYAxis, xValues = scope.getXValues(), qtl = scope.getQtl(), genes = scope.filterGenes(scope.getGenes(), qtl), snps = scope.getSnps(),
           svgSize = scope.getSvgSize(), plottableGenes = scope.layerGenes(scope.orderGenes(genes)), maxLayer = scope.getMaxLayer(plottableGenes);
+
+        scope.associateSnps(plottableGenes, snps);
 
         genes.sort(function(a, b) {
           return a.start - b.start;
@@ -838,7 +1162,7 @@ chartModule.directive("genes", function($log) {
 
         // if we have data defined
         if (genes.length) {
-          x = d3.scale.linear().domain([qtl.position - 1000000, qtl.position + 1000000]).range([ 0, svgSize.width - svgSize.width * svgSize.padding]);
+          x = d3.scale.linear().domain([qtl.position - scope.genomicResolution(), qtl.position + scope.genomicResolution()]).range([ 0, svgSize.width - svgSize.width * svgSize.padding]);
           y = d3.scale.linear().domain([0, maxLayer]).range([0, svgSize.height]);
 
           geneXAxis = d3.svg.axis().scale(x).orient("bottom").ticks(10)
@@ -871,12 +1195,12 @@ chartModule.directive("genes", function($log) {
                 {x: qtl.position, y: y.domain()[1]}
               ],
             color: "#777777",
-            strokeWidth: 3
+            strokeWidth: 2
           }];
 
           // draw the zero line
           var qtlMarker = scope.geneContainer.selectAll(".zeroline").data(baseLine);
-         qtlMarker.enter().append("path").attr("class", "zeroline");
+          qtlMarker.enter().append("path").attr("class", "zeroline");
 
           qtlMarker.attr("d", function(d) {
             return line(d.lineData); 
@@ -891,14 +1215,29 @@ chartModule.directive("genes", function($log) {
 
           qtlMarker.exit().remove();
 
+          var qtlText = scope.geneContainer.selectAll(".qtlLabel").data([qtl]);
+
+          qtlText.enter().append("text").attr("class", "qtlLabel");
+
+          qtlText.attr("opacity", 0)
+            .attr("x", function(d) {
+              return x(d.position + 5000); 
+            }).attr("y", function(d) {
+              return y(y.domain()[1] - .25); 
+            }).text("QTL Position").transition()
+            .duration(1500)
+            .attr("opacity", 1);
+
+          qtlText.exit().remove();
+
           geneDataset = scope.geneContainer.selectAll(".gene").data(plottableGenes);
 
           geneDataset.enter().append("rect").attr("class", "gene").attr("opacity", 0);
 
           geneDataset.attr("opacity", 0)
           .attr('fill', function(d) {
-              if (d.gene.strand === "+") {
-                return "#823030";
+              if (d.snps.length == 0) {
+                return "#727272";
               } else {
                 return "#675EA8";
               }
@@ -914,8 +1253,10 @@ chartModule.directive("genes", function($log) {
               } else {
                 return width;
               }
-            }).attr("rx", 7.5)
-              .attr("ry",7.5)
+            }).attr("rx", 5)
+              .attr("ry",5)
+              .transition()
+              .duration(1500)
               .attr("opacity", 1);
           
           // remove unneeded lines
@@ -933,16 +1274,44 @@ chartModule.directive("genes", function($log) {
 
             // define the inner HTML of the tooltip
             tip.html(function () {
+              var crossReferences = d.gene.databaseCrossReference.split(",");
+              var formattedCrossReferences = "";
+
+              for (var i = 0; i < crossReferences.length; i++) {
+
+                formattedCrossReferences += "<span style='color: #e8e8e8'>&nbsp;&nbsp;&nbsp;&nbsp;" + crossReferences[i] + "</span>"; 
+
+                if (i != crossReferences.length - 1) {
+                  formattedCrossReferences += "<br>";
+                }
+              }
+
+
               let tipText = "<strong style='color: #31c4ae'>Gene Name:</strong> <span style='color: #e8e8e8'>" + d.gene.name + " </span><br><br>"
                               + "<strong style='color: #31c4ae'>Start:</strong> <span style='color: #e8e8e8'>" + scope.formatPosition(d.gene.start) + " </span>"
                               + "<strong style='color: #31c4ae'>Stop:</strong> <span style='color: #e8e8e8'>" + scope.formatPosition(d.gene.stop) + "</span><br><br>"
-                              + "<strong style='color: #31c4ae'>Gene Length:</strong> <span style='color: #e8e8e8'>" + scope.formatPosition(d.gene.stop - d.gene.start) + "</span><br><br>";
-                          /*  
-                              + "<strong style='color: #31c4ae'>Start:</strong> <span style='color: #e8e8e8'>" + d3.format("s")(d.start) + "bp </span>"
-                              + "<strong style='color: #31c4ae'>Stop:</strong> <span style='color: #e8e8e8'>" + d3.format("s")(d.stop) + "bp</span><br><br>"
-                              + "<strong style='color: #31c4ae'>Gene Length:</strong> <span style='color: #e8e8e8'>" + d3.format("s")(d.stop - d.start) + "bp</span><br><br>";
-                          */
-                return tipText;
+                              + "<strong style='color: #31c4ae'>Gene Length:</strong> <span style='color: #e8e8e8'>" + scope.formatPosition(d.gene.stop - d.gene.start) + "</span><br><br>"
+                              + "<strong style='color: #31c4ae'>Gene Classification:</strong> <span style='color: #e8e8e8'>" + d.gene.bioType + "</span><br><br>"
+                              + "<strong style='color: #31c4ae'>Database Cross-References:</strong><br>" + formattedCrossReferences + "<br>";
+                              
+              if (d.snps.length != 0) {
+                var uniqueDescriptions = scope.extractUniqueSnpDescriptions(d.snps);
+                var formattedDescriptions = "";
+
+                for (var i = 0; i < uniqueDescriptions.length; i++) {
+
+                  formattedDescriptions += "<span style='color: #e8e8e8'>&nbsp;&nbsp;&nbsp;&nbsp;" + uniqueDescriptions[i].replace(/_/g, " ") + "</span>"; 
+
+                  if (i != uniqueDescriptions.length - 1) {
+                    formattedDescriptions += "<br>";
+                  }
+                }
+
+                tipText += "<br><strong style='color: #31c4ae'># SNPs:</strong> <span style='color: #e8e8e8'>" + d.snps.length + "</span><br><br>"
+                 + "<strong style='color: #31c4ae'>SNP Associations:</strong><br>" + formattedDescriptions + "<br>";
+
+              }
+              return tipText;
             });
 
             // show the tooltip
@@ -954,6 +1323,60 @@ chartModule.directive("genes", function($log) {
             d3.select(this).style("stroke", "none");
             tip.hide();
           });
+
+          // define zoom functionality on the x-axis
+          var zoomX = d3.behavior.zoom()
+            .scaleExtent([1, 1000])
+            .x(x)
+            .on("zoom", function() {
+
+              // define translation object to move svg elements from original to zoomed position on the svg
+              var t = zoomX.translate(); 
+
+              // get max range in svg space. not data
+              var minX = d3.min(x.range());
+              var maxX = d3.max(x.range());
+
+              var tx0 = Math.max(Math.min(0, t[0]), - maxX * zoomX.scale());
+              var tx1 = Math.min(Math.max(maxX, t[1]), - maxX  * zoomX.scale());
+
+              // update translation to new coordinates. 
+              zoomX.translate([ tx0, t[1] ]);
+
+              // calling the x axes here seems to be necessary to get them to scale correctly. 
+              scope.container.selectAll("g.xGene").call(geneXAxis);
+
+              // using the new scale, update the spectral peak positions
+              geneDataset.attr("opacity", 0)
+                .attr("x", function(d) {
+                  return x(d.gene.start);
+                }).attr("height", 15)
+                .attr("width", function(d) {
+                  var width = x(d.gene.stop) - x(d.gene.start);
+                  if (width < 7.5) {
+                    return 7.5;
+                  } else {
+                    return width;
+                  }
+                }).attr("rx", 7.5)
+                .attr("ry",7.5)
+                .attr("opacity", 1);
+
+              // redraw QTL marker
+              qtlMarker.attr("d", function(d) {
+                return line(d.lineData); 
+              });
+
+              qtlText.attr("x", function(d) {
+                return x(d.position + 5000); 
+              });
+          });
+
+          // give zooming behavior to your invisible zoom rectangles
+          scope.zoomX.call(zoomX);
+
+          // also pass zooming behavior onto the actual axis elements (ticks, axis labels ect.). Prevents unexpected page scrolling. 
+          scope.container.selectAll("g.xGene").call(zoomX);
 
         } else {
           // no data yet. just render axes.
@@ -981,7 +1404,7 @@ chartModule.directive("genes", function($log) {
       /**
        * Watch model changes
        */
-      scope.$watch('plotdata', scope.redraw, true);
+      scope.$watch('plotdata.genes', scope.redraw, true);
       scope.$watch('options', scope.setSvgSize);
        
       scope.initialize();

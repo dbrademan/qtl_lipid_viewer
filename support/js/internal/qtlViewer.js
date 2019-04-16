@@ -39,7 +39,8 @@ myApp.controller('GroupCtrl', function($scope, $uibModal, $log, $localStorage, $
         y: []
       },
       qtl: {},
-      genes: []
+      genes: [],
+      snps: []
     },
     svgSizes: {
       lodSVG: {
@@ -48,7 +49,7 @@ myApp.controller('GroupCtrl', function($scope, $uibModal, $log, $localStorage, $
         margin: {
           top: 5,
           right: 15,
-          bottom: 45,
+          bottom: 10,
           left: 55
         },
         padding: .02,
@@ -99,7 +100,8 @@ myApp.controller('GroupCtrl', function($scope, $uibModal, $log, $localStorage, $
   };
 
   $scope.updateGenePlot = function(plottableObjects) {
-    $scope.set.consensusData.genes = plottableObjects;
+    $scope.set.consensusData.genes = plottableObjects.genes;
+    $scope.set.consensusData.snps = plottableObjects.snps;
   };
 });
 
@@ -141,7 +143,7 @@ myApp.controller('queryCtrl', function($scope, $uibModal, $log, $localStorage, $
       return true;
     }
     
-    return lipid.class === $scope.lipids.filter.class.filterValue;
+    return lipid.newClass === $scope.lipids.filter.class.filterValue;
   };
 
   // sub-filter specifically for matching tissue of origin for lipid identifications
@@ -177,16 +179,17 @@ myApp.controller('queryCtrl', function($scope, $uibModal, $log, $localStorage, $
 
   // format lipid class selectbox options 
   $scope.formatClassOption = function(id) {
-    returnString = id.analyteName + " " + id.precursorMz;
+    returnString = id.newAnalyteName + " " + id.precursorMz;
       
       return returnString;
   };
 
   // format lipid selectbox dropdown options
   $scope.formatLipidOption = function(id) {
-    return "<b>Lipid Name: </b>" + id.analyteName + "<br/>" 
-      + "<b>Lipid Class: </b>" + id.class + "<br/>" 
+    return "<b>Lipid Name: </b>" + id.newAnalyteName + "<br/>" 
+      + "<b>Lipid Class: </b>" + id.newClass + "<br/>" 
       + "<b>Precursor <i>m</i>/<i>z</i>: </b>" + parseFloat(id.precursorMz).toFixed(4) + "<br/>" 
+      + "<b>Polarity: </b>" + id.polarity + "<br/>" 
       + "<b>Sample Tissue: </b>" + id.tissue;
   };
 
@@ -197,9 +200,10 @@ myApp.controller('queryCtrl', function($scope, $uibModal, $log, $localStorage, $
       return "";
     }
 
-    return "<b>Lipid Name: </b>" + $scope.lipids.selectedQtl.lipid.analyteName + "<br/>" 
-      + "<b>Lipid Class: </b>" + $scope.lipids.selectedQtl.lipid.class + "<br/>"
+    return "<b>Lipid Name: </b>" + $scope.lipids.selectedQtl.lipid.newAnalyteName + "<br/>" 
+      + "<b>Lipid Class: </b>" + $scope.lipids.selectedQtl.lipid.newClass + "<br/>"
       + "<b>Precursor <i>m</i>/<i>z</i>: </b>" + parseFloat($scope.lipids.selectedQtl.lipid.precursorMz).toFixed(4) + "<br/>"
+      + "<b>Polarity: </b>" + $scope.lipids.selectedQtl.lipid.polarity + "<br/>" 
       + "<b>Sample Tissue: </b>" + $scope.lipids.selectedQtl.lipid.tissue;
   };
 
@@ -253,6 +257,7 @@ myApp.controller('queryCtrl', function($scope, $uibModal, $log, $localStorage, $
         if (response.data.hasOwnProperty("error")) {
           alert(response.data.error);
         } else {
+        	$log.log(response);
           $scope.lipids.options.ids = response.data.identifiedLipids;
           $scope.lipids.options.classes = response.data.lipidClasses;
           $scope.lipids.options.tissues = [
@@ -352,6 +357,7 @@ myApp.controller('queryCtrl', function($scope, $uibModal, $log, $localStorage, $
 
       var url = "support/php/queryGenes.php";
       var data = $scope.lipids.selectedQtl.qtl;
+      $log.log(data);
       $http.post(url, data)
         .then( function(response) {
           // if errors exist, alert user
@@ -360,7 +366,7 @@ myApp.controller('queryCtrl', function($scope, $uibModal, $log, $localStorage, $
           } else {
             $scope.updateGenePlot(response.data);
           }
-        });  
+        });
     }
   });
 });

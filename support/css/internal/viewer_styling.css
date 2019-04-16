@@ -24,6 +24,14 @@ hr.no-padding {
   margin-bottom: 0px;
 }
 
+.no-bottom-margin {
+  margin-bottom: 0px;
+}
+
+.small-margin {
+  margin-top: 5px;
+  margin-bottom: 5px;
+}
 
 .input-group {
   width: 100%;
@@ -36,6 +44,10 @@ hr.no-padding {
 
 .input-padding {
   padding-top: 15px;
+}
+
+.row-padding {
+  padding-bottom: 15px;
 }
 
 .section-header {
@@ -170,6 +182,10 @@ body {
   shape-rendering: crispEdges;
 }
 
+.ignorePointerEvents {
+  pointer-events: none;
+}
+
 .xAnnotationLabel, 
 .yAnnotationLabel,
 .yQTLLabel,
@@ -200,7 +216,8 @@ body {
   stroke-width: 2;
 }
 
-.zeroline {
+.zeroline,
+.markerline {
   stroke-width: 1;
   stroke-dasharray: 5;
 }
@@ -209,13 +226,18 @@ body {
   stroke-width: 0;
 }
 
+.qtlLabel {
+  font-family: Montserrat, sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+}
+
 /* probably won't work tooltip */
 .d3-tip {
   line-height: 1;
   font-weight: bold;
   padding: 12px;
-  background: rgba(0, 0, 0, 0.8);
-  color: #fff;
+  background: rgba(0, 0, 0, 0.9);
   border-radius: 2px;
   pointer-events: none;
 }
@@ -227,7 +249,7 @@ body {
   font-size: 10px;
   width: 100%;
   line-height: 1;
-  color: rgba(0, 0, 0, 0.8);
+  color: rgba(0, 0, 0, 0.9);
   content: "\25BC";
   position: absolute;
   text-align: center;
@@ -242,6 +264,8 @@ body {
   pointer-events:none !imporatant;
 }
 
+
+/* webpage styling for inputs */
 .ui-select-toggle {
   height: auto;
 }
