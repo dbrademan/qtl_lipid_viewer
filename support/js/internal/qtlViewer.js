@@ -257,7 +257,6 @@ myApp.controller('queryCtrl', function($scope, $uibModal, $log, $localStorage, $
         if (response.data.hasOwnProperty("error")) {
           alert(response.data.error);
         } else {
-        	$log.log(response);
           $scope.lipids.options.ids = response.data.identifiedLipids;
           $scope.lipids.options.classes = response.data.lipidClasses;
           $scope.lipids.options.tissues = [
@@ -357,7 +356,7 @@ myApp.controller('queryCtrl', function($scope, $uibModal, $log, $localStorage, $
 
       var url = "support/php/queryGenes.php";
       var data = $scope.lipids.selectedQtl.qtl;
-      $log.log(data);
+
       $http.post(url, data)
         .then( function(response) {
           // if errors exist, alert user

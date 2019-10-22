@@ -1,4 +1,4 @@
-   /**
+    /**
    * @classdesc The visualization generation of IPSA is driven by the AngularJS directive coded below. This directive will embed an SVG element into a <div>
    *    Javascript objects are listed as attributes to the div tag and provide the script with the variables needed to generated the interactive annotated spectrum
    * @example <div annotated-spectrum plotdata="set.plotData" peptide="set.peptide" settings="set.settings" class="content"></div>
@@ -1086,7 +1086,8 @@ chartModule.directive("genes", function($log) {
             returnArray.push({
               gene: d,
               level: i,
-              snps: []
+              snps: [],
+              highlight: false
             });
           });
         }
@@ -1118,14 +1119,20 @@ chartModule.directive("genes", function($log) {
             if (snp.position < layer.gene.start) {
               break;
             } else {
-              if (snp.position <= layer.gene.stop) {
+              if (snp.position <= layer.gene.stop && scope.geneMatch(layer.gene, snp)) {
                 layer.snps.push(snp);
+
+                if (snp.highlight) {
+                  layer.highlight = true;
+                }
               }
             }
           };
         });
+      }
 
-        $log.log(layeredGenes);
+      scope.geneMatch = function(gene, snp) {
+        return gene.databaseCrossReference && gene.databaseCrossReference != "NA" && gene.databaseCrossReference.includes(snp.ensembl_gene);
       }
 
       scope.extractUniqueSnpDescriptions = function(snps) {
@@ -1135,7 +1142,7 @@ chartModule.directive("genes", function($log) {
           var splitSnps = snp.csq.split(",");
 
           splitSnps.forEach(function(splitSnp){ 
-            if (!returnList.includes(splitSnp)) {
+            if (!returnList.includes(splitSnp) && splitSnp != "NA") {
               returnList.push(splitSnp);
             }
           });
@@ -1235,11 +1242,11 @@ chartModule.directive("genes", function($log) {
           geneDataset.enter().append("rect").attr("class", "gene").attr("opacity", 0);
 
           geneDataset.attr("opacity", 0)
-          .attr('fill', function(d) {
-              if (d.snps.length == 0) {
+            .attr('fill', function(d) {
+              if (!d.highlight) {
                 return "#727272";
               } else {
-                return "#675EA8";
+                return "#c95555";
               }
             }).attr("x", function(d) {
               return x(d.gene.start);
