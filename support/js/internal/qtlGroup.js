@@ -1243,10 +1243,12 @@ chartModule.directive("genes", function($log) {
 
           geneDataset.attr("opacity", 0)
             .attr('fill', function(d) {
-              if (!d.highlight) {
-                return "#727272";
+              if (d.highlight) {
+                return "#de2d26";
+              } else if (d.snps.length != 0) {
+                return "#fc9272";
               } else {
-                return "#c95555";
+                return "#727272";
               }
             }).attr("x", function(d) {
               return x(d.gene.start);

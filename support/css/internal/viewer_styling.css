@@ -70,9 +70,30 @@ hr.no-padding {
 }
 
 .navbar .divider-vertical {
-  height: 30px;
-  margin-top: 10px;
+  height: 80px;
+  margin-top: 5px;
   border-right: 1px solid #ffffff;
+}
+
+.navbar-link {
+  margin-top: 5px;
+}
+
+.nav > li > a {
+  color: #fff;
+  padding-top: 30px;
+  padding-bottom: 30px;
+}
+
+.active {
+  background-color: rgba(255,255,255,0.25);
+  color: #ffffff;
+}
+
+.nav > li > a:hover,
+.nav > li > a:focus {
+  background-color: rgba(255,255,255,0.25);
+  color: #000;
 }
 
 .navbar-logo {
@@ -289,21 +310,6 @@ body {
 
 div.valid-data i {
   vertical-align:middle;  
-}
-
-/* unvisited link */
-a:link {
-  color: #1c9cbc;
-}
-
-/* visited link */
-a:visited {
-  color: purple;
-}
-
-/* mouse over link */
-a:hover {
-  color: purple;
 }
 
 .pull-right {

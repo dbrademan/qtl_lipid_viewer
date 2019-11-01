@@ -1,0 +1,167 @@
+<!doctype html>
+<html ng-app="qtl-viewer" lang="en">
+  <head>
+  	<meta charset="utf-8"/>
+    <meta http-equiv="Content-Language" content="en"/>
+    <meta name="google" content="notranslate">
+    <!-- scripts -->
+    <script src="support/js/external/jquery.min.js"></script>
+    <script src="support/js/external/angular.min.js"></script>
+    <script src="support/js/external/angular-animate.min.js"></script>
+    <script src="support/js/external/angular-sanitize.min.js"></script>
+    <script src="support/js/external/ui-bootstrap-tpls-2.5.0.min.js"></script>
+    <script src="support/js/external/select.min.js"></script>
+    <script src="support/js/external/ngStorage.js"></script>
+    <script src="support/js/external/d3.v3.min.js" charset="utf-8"></script>
+    <script src="support/js/external/d3-ease.v1.min.js"></script>
+    <script src="support/js/external/d3-tip.js"></script>
+    <script src="support/js/external/jquery.minicolors.min.js"></script>
+    <script src="support/js/external/angular-minicolors.min.js"></script>
+    <script src="support/js/external/angular-downloadsvg-directive.js"></script>
+
+    <script src="support/js/internal/geneDrivenViewer.js"></script>
+    <script src="support/js/internal/qtlGroup.js"></script>
+
+    <!-- stylesheets -->
+    <link href="support/css/external/bootstrap.min.css" rel="stylesheet">
+    <link href="support/css/external/navbar-fixed-side.css" rel="stylesheet">
+    <link href="support/css/external/select.min.css" rel="stylesheet">
+    <link href="support/css/external/handsontable.full.min.css" rel="stylesheet">
+    <link href="support/css/internal/viewer_styling.css" rel="stylesheet">
+    <link href="support/css/external/Montserrat.css" rel="stylesheet">
+    <link href="support/css/external/Open+Sans.css" rel="stylesheet">
+    <link href="support/css/external/Inconsolata.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.css" rel="stylesheet">
+  </head>
+  <nav class="navbar navbar-gradient navbar-expand navbar-static-top" role="navigation">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle" ng-click="isNavCollapsed = !isNavCollapsed">
+        <span class="sr-only">Toggle navigation</span>
+      </button>
+      <div class="navbar-left">
+        <img class="img-responsive" src="support/images/qtl_logo_white.png" alt="Diversity outbred mouse lipid qtl portal">
+      </div>
+    </div>
+    <ul class="nav navbar-nav">
+      <li class="divider-vertical"></li>
+      <li class="navbar-link"><a href="qtlViewer.html">Landing Page</a></li>
+      <li class="divider-vertical"></li>
+      <li class="active navbar-link"><a href="geneDrivenViewer.html">Manage Instruments</a></li>
+    </ul>
+    <div class="collapse navbar-collapse" uib-collapse="isNavCollapsed">
+      <ul class="nav navbar-nav navbar-right">
+        <a href="http://coonlabs.com/">
+          <img class="img-responsive" src="support/images/coon_logo.png" alt="Coon laboratories logo">
+        </a>
+      </ul>
+    </div>
+  </nav>
+  <div class="container-fluid">
+    <body>
+      <div ng-controller="GroupCtrl">
+        <div class="row">
+          <div ng-controller="queryCtrl">
+            <div class="col-md-3">
+              <div class="panel panel-default">
+                <div class="panel-heading">
+                  <h2 class="panel-title">Control Panel</h2>
+                </div>
+                <div class="panel-body">
+                  <label class="section-header" title="Select a gene from the dropdown to filter QTLs!">Filter QTLs By Gene...</label>
+                  <div class="row">
+                    <div class="col-md-12">
+                      <label class="input-label" title="Select a gene from the dropdown to filter QTLs!">
+                        Genes
+                      </label> 
+                      <i class="fa fa-question-circle" aria-hidden="true" title="Select a lipid class from the dropdown!"></i>
+                      <div class="form-group">
+                        <ui-select ng-model="genes.selectedGene.gene" search-enabled="true">
+                          <ui-select-match>
+                            <span ng-bind-html="formatGene(genes.selectedGene.gene)"></span>
+                          </ui-select-match>
+                          <ui-select-choices repeat="gene in genes.options.genes | filter: $select.search | orderBy: gene.name | limitTo: 50">
+                            <span ng-bind-html="formatGene(gene)"></span>
+                          </ui-select-choices>
+                        </ui-select>
+                      </div>
+                    </div>
+                  </div>
+                  <label class="section-header" title="Use the options below to filter QTLs by chromosomal/genomic position!">By Genomic Position (&#177;2Mbp)</label>
+                  <div class="row">
+                    <div class="col-md-6">
+                      <label class="input-label" title="Select a chromosome From the dropdown!">
+                        Chromosome
+                      </label> 
+                      <i class="fa fa-question-circle" aria-hidden="true" title="Select a chromosome From the dropdown!"></i>
+                      <div class="form-group">
+                        <ui-select ng-model="genes.filter.chromosome" search-enabled="true">
+                          <ui-select-match>
+                            <span ng-bind-html="formatChromosome(genes.filter.chromosome)"></span>
+                          </ui-select-match>
+                          <ui-select-choices repeat="chromosome in genes.options.chromosomes | filter: $select.search | orderBy: chromosome.name">
+                            <span ng-bind-html="formatChromosome(chromosome)"></span>
+                          </ui-select-choices>
+                        </ui-select>
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <label class="input-label" title="Enter a genomic position within the limits of the chromosome!">
+                        Position, {{genes.filter.chromosome.start}} - {{genes.filter.chromosome.stop}} Mbp
+                      </label> 
+                      <i class="fa fa-question-circle" aria-hidden="true" title="Enter a genomic position within the limits of the chromosome!"></i>
+                      <div class="input-group">
+                        <input type="number" title="Enter a genomic position within the limits of the chromosome!" class="form-control" ng-model="genes.filter.position" min="genes.filter.chromosome.start" max="genes.filter.chromosome.stop"/>
+                      </div>
+                    </div>
+                  </div>
+                  <hr class="small-margin"/>
+                  <div ng-hide="genes.options.qtls.length === 0">
+                    <label class="section-header" title="Select an option from the dropdown below to view a specific QTL">Select A QTL to View</label>
+                    <div class="row">
+                      <div class=col-md-12>
+                        <label class="input-label" title="Select a qtl from the dropdown below to view a QTL">Select A QTL: </label>
+                        <span title="Select a qtl from the dropdown below to view a QTL">{{genes.options.qtls.length}} Option(s)</span> 
+                        <i class="fa fa-question-circle" aria-hidden="true" title="Select a qtl from the dropdown below to view a QTL"></i>
+                        <div class="form-group">
+                          <ui-select ng-disabled="genes.options.qtls.length == 0" ng-model="genes.selectedGene.qtl" search-enabled="false">
+                            <ui-select-match placeholder="Click to browse available qtls">
+                              <span ng-bind-html="formatSelectedQtl()"></span>
+                            </ui-select-match>
+                            <!-- crazy & ugly filtering logic -->
+                            <ui-select-choices repeat="qtl in genes.options.qtls | filter: $select.search">
+                              <span ng-bind-html="formatQtlOption(qtl)"></span><hr class="no-padding"/>
+                            </ui-select-choices>
+                          </ui-select>
+                        </div>
+                      </div>
+                    </div>
+                    <!--<button class="btn btn-default" ng-click="logScope()">Log Scope</button>-->
+                  </div>
+                  <div ng-show="genes.options.qtls.length === 0">
+                    <label class="section-header" style="color:red">
+                      No QTLs found for at this locus. Please select another one.
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-9">
+            <div class="panel panel-default">
+              <div class="panel-heading">
+                <h2 class="panel-title">{{chromosomeNumber}}</h2>
+              </div>
+              <div class="panel-body">
+                <!--<div qtl-groups plotdata="set.groupData" svgsize="set.svgSize.groupSVG" class="content"></div>-->
+                <div lod-line-chart plotdata="set.consensusData" svgsize="set.svgSizes.lodSVG" class="content"></div>
+                <div allele-effects-chart plotdata="set.consensusData" svgsize="set.svgSizes.alleleEffectSVG" class="content"></div>
+                <hr class="dashed small-margin">
+                <div genes plotdata="set.consensusData" svgsize="set.svgSizes.geneSVG" class="content"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </body>
+  </div>
+</html>
